@@ -347,7 +347,7 @@
     </div>
   </div>
 
-  <!-- ORDER BOARD -->
+  <!-- ORDER BOARD (slim) -->
   <div id="board-view" class="fixed inset-0 bg-slate-100 z-50 flex-col">
     <div class="no-print flex items-center justify-between gap-2 bg-white border-b border-slate-200 px-3 py-2 shrink-0">
       <div class="flex items-center gap-2 min-w-0">
@@ -445,9 +445,6 @@
   <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg max-w-[90%] text-center"></div>
 
   <script>
-    /* ============================================================
-       SCHEMA IDENTITY
-       ============================================================ */
     const SCHEMA_VERSION = 1;
     const APP_NAME = 'checkout-ledger';
     const APP_VERSION = '1.0.0';
@@ -456,9 +453,6 @@
       catch (_) { return 'Asia/Manila'; }
     })();
 
-    /* ============================================================
-       STORAGE
-       ============================================================ */
     const KEY_PRESETS    = 'bookkeeping_presets';
     const KEY_TXS        = 'bookkeeping_txs';
     const KEY_CUSTOMERS  = 'bookkeeping_customers';
@@ -514,9 +508,6 @@
       } catch (_) {}
     }
 
-    /* ============================================================
-       UTILITIES
-       ============================================================ */
     function esc(v) {
       return String(v).replace(/[&<>"']/g, c => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -587,9 +578,6 @@
       return Array.from(dates).sort();
     }
 
-    /* ============================================================
-       STATUS
-       ============================================================ */
     const ORDER_STATUSES = [
       { key: 'not_started', label: 'Not Started', cls: 'bg-slate-100  text-slate-600   border-slate-200'  },
       { key: 'preparing',   label: 'Preparing',   cls: 'bg-amber-100  text-amber-700   border-amber-200'  },
@@ -620,9 +608,6 @@
       return Math.max(0, Math.round((e - s) / 60000));
     }
 
-    /* ============================================================
-       SETTINGS
-       ============================================================ */
     const defaultSettings = {
       currency: '₱', refUnitPrice: 20, goal: 0,
       lastBackupAt: 0, lastEndDayAt: 0, showCash: false,
@@ -669,9 +654,6 @@
     }
     let appSettings = mergeSettings(loadJSON(KEY_SETTINGS, null));
 
-    /* ============================================================
-       PRESETS + CUSTOMERS + DATA
-       ============================================================ */
     const defaultPresets = {
       specials: {
         A: { name: 'SPECIAL A', total: 150, qty: 3 },
@@ -727,9 +709,6 @@
       });
     })();
 
-    /* ============================================================
-       APP STATE
-       ============================================================ */
     let currentPrice = Math.max(0, toNum(appSettings.refUnitPrice, 20));
     let currentQty = 1;
     let currentName = 'no name';
@@ -763,9 +742,6 @@
     function saveColumnOrder() { saveJSON(KEY_TABLE_COLS, columnOrder); }
     let columnOrder = loadColumnOrder();
 
-    /* ============================================================
-       MODALS  (submitModal has the chained-modal fix)
-       ============================================================ */
     let modalSubmitHandler = null;
     let modalCancelHandler = null;
     function isModalOpen() { const el = document.getElementById('app-modal'); return !!el && !el.classList.contains('hidden'); }
@@ -842,9 +818,6 @@
       if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
     }
 
-    /* ============================================================
-       PANELS
-       ============================================================ */
     const PANEL_IDS = ['price-options', 'qty-options', 'name-options', 'autocomplete-suggestions'];
     function closePanels(exceptId) {
       PANEL_IDS.forEach(id => { if (id === exceptId) return; const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
@@ -875,9 +848,6 @@
       closePanels();
     });
 
-    /* ============================================================
-       CHECKOUT RENDERING
-       ============================================================ */
     function updateTotalPreview() {
       const total = isSpecialOverride ? specialFixedTotal : (currentPrice * currentQty);
       document.getElementById('total-price-preview').innerText = money(total);
@@ -1071,9 +1041,6 @@
     }
     function refreshCheckoutExtras() { renderTodayStrip(); renderCheckoutGoalBar(); updateChange(); renderArchiveInfo(); updateEndDayBadge(); }
 
-    /* ============================================================
-       ADD TRANSACTION
-       ============================================================ */
     function addTransaction() {
       const total = isSpecialOverride ? specialFixedTotal : currentPrice * currentQty;
       if (!Number.isFinite(total) || total <= 0) { toast('Set a price greater than 0.'); return; }
@@ -1113,9 +1080,6 @@
     }
     function touchTx(tx) { if (tx) tx.updatedAt = Date.now(); }
 
-    /* ============================================================
-       BOARD
-       ============================================================ */
     function isBoardViewOpen() { const el = document.getElementById('board-view'); return !!el && el.classList.contains('open'); }
     function boardTransactions() {
       return [...transactions].sort((a, b) => {
@@ -1249,7 +1213,7 @@
     function toggleShowDelivered() { boardShowDelivered = !boardShowDelivered; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
     function toggleShowVoided() { boardShowVoided = !boardShowVoided; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
 
-    /* Slim table: Unit Price + Special are merged as a subtitle under Total */
+    /* SLIM renderBoard - 6 base columns, unit price + special merged into Total subtitle */
     function renderBoard() {
       const table = document.getElementById('board-table'); if (!table) return;
       const list = filteredBoardTransactions();
@@ -1435,9 +1399,6 @@
       });
     }
 
-    /* ============================================================
-       SALES TABLE
-       ============================================================ */
     function isTableViewOpen() { const el = document.getElementById('table-view'); return !!el && el.classList.contains('open'); }
     function salesTransactions() { return transactions.filter(t => !isVoided(t) && statusOf(t) === 'delivered'); }
     function rowChangedAt(t) { return toNum(t.updatedAt, 0) || toNum(new Date(t.date).getTime(), 0); }
@@ -1613,9 +1574,6 @@
     }
     function resetColumnOrder() { columnOrder = [...DEFAULT_COLUMN_ORDER]; saveColumnOrder(); renderTable(); toast('Column order reset.'); }
 
-    /* ============================================================
-       VIEWS
-       ============================================================ */
     function openBoardView() { toggleSidebar(false); closePanels(); document.getElementById('board-view').classList.add('open'); renderBoardFilters(); renderBoard(); renderBoardStats(); }
     function closeBoardView() { document.getElementById('board-view').classList.remove('open'); }
     function openTableView() { toggleSidebar(false); closePanels(); document.getElementById('table-view').classList.add('open'); renderTable(); requestLandscape(); }
@@ -1633,9 +1591,6 @@
       try { if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen(); } catch (_) {}
     }
 
-    /* ============================================================
-       SIDEBAR EDITORS
-       ============================================================ */
     function renderAllSettingsEditors() {
       renderTierEditorRows(appSettings.tiers.map(t => ({ ...t })));
       renderQtyPresetEditorRows([...appSettings.qtyPresets]);
@@ -1739,9 +1694,6 @@
       toast('Settings saved.');
     }
 
-    /* ============================================================
-       END DAY
-       ============================================================ */
     function updateEndDayBadge() {
       const badge = document.getElementById('end-day-badge'); if (!badge) return;
       const lastEnd = toNum(appSettings.lastEndDayAt, 0);
@@ -1857,9 +1809,6 @@
       return true;
     }
 
-    /* ============================================================
-       ARCHIVE
-       ============================================================ */
     function renderArchiveInfo() {
       const el = document.getElementById('archive-info'); if (!el) return;
       const archive = loadJSON(KEY_ARCHIVE, []);
@@ -1904,9 +1853,6 @@
       });
     }
 
-    /* ============================================================
-       SCHEMA + CANONICAL EXPORT
-       ============================================================ */
     const SCHEMA_SPEC = {
       $schema: 'https://json-schema.org/draft/2020-12/schema',
       $id: 'checkout-ledger/orders/v1',
@@ -2037,9 +1983,6 @@
       toast('schema.md downloaded.');
     }
 
-    /* ============================================================
-       EXCEL / CSV
-       ============================================================ */
     function exportToExcel() {
       const all = allExportedTx();
       if (all.length === 0) { toast('No data to export yet.'); return false; }
@@ -2102,9 +2045,6 @@
       return true;
     }
 
-    /* ============================================================
-       BACKUP / RESTORE
-       ============================================================ */
     function backupJSON() {
       const payload = {
         schema_version: SCHEMA_VERSION,
@@ -2172,9 +2112,6 @@
       input.click();
     }
 
-    /* ============================================================
-       PRINT
-       ============================================================ */
     function runPrint(bodyClass) {
       document.body.classList.add(bodyClass);
       const mql = window.matchMedia('print');
@@ -2195,9 +2132,6 @@
     function printBoard() { renderBoardStats(); renderBoard(); runPrint('printing-board'); }
     function printTable() { renderTable(); runPrint('printing-table'); }
 
-    /* ============================================================
-       TOAST
-       ============================================================ */
     let toastTimer;
     function toast(message, action) {
       const el = document.getElementById('toast'); if (!el) return;
@@ -2217,9 +2151,6 @@
       }
     }
 
-    /* ============================================================
-       MULTI-TAB
-       ============================================================ */
     (function setupMultiTab() {
       const tabId = 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2);
       let warned = false;
@@ -2248,9 +2179,6 @@
       });
     })();
 
-    /* ============================================================
-       PWA
-       ============================================================ */
     (function setupPWA() {
       try {
         const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#10b981"/><text x="256" y="340" font-family="Arial" font-size="260" font-weight="bold" fill="#fff" text-anchor="middle">₱</text></svg>';
@@ -2293,9 +2221,6 @@
       });
     }
 
-    /* ============================================================
-       INIT
-       ============================================================ */
     updateHeaderDate();
     setInterval(updateHeaderDate, 60000);
     renderTierButtons(); renderQtyPresetButtons(); renderAllSettingsEditors();
