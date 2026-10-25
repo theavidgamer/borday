@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#10b981">
   <meta name="description" content="Minimal bookkeeping PWA for a single product.">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Ledger">
-  <title>Minimal Bookkeeping PWA</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <title>Quick Checkout Ledger</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sheetjs@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
@@ -24,9 +28,10 @@
     details.settings-section > summary::-webkit-details-marker { display: none; }
     details.settings-section > summary .chev { transition: transform .15s ease; display: inline-block; }
     details.settings-section[open] > summary .chev { transform: rotate(180deg); }
-    @media (max-width: 767px) {
-      input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
-    }
+    .text-\[8px\]  { font-size: 0.5rem !important; }
+    .text-\[9px\]  { font-size: 0.5625rem !important; }
+    .text-\[10px\] { font-size: 0.625rem !important; }
+    .text-\[11px\] { font-size: 0.6875rem !important; }
     @media print {
       body.printing-board > *:not(#board-view) { display: none !important; }
       body.printing-board #board-view { display: flex !important; position: static !important; background: #fff !important; }
@@ -45,12 +50,21 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center justify-between p-4 selection:bg-emerald-500 selection:text-white">
 
-  <div id="multi-tab-banner" class="hidden w-full max-w-md mb-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl p-2.5 text-xs font-semibold items-center justify-between gap-2">
+  <div id="multi-tab-banner" class="hidden w-full max-w-md md:max-w-3xl mb-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl p-2.5 text-xs font-semibold items-center justify-between gap-2">
     <span>⚠️ Another tab is open. Use only one window.</span>
     <button type="button" onclick="location.reload()" class="px-2 py-0.5 bg-amber-600 text-white rounded-md text-[10px] font-bold">Reload</button>
   </div>
 
-  <header class="w-full max-w-md flex items-center justify-between gap-1.5 mb-2">
+  <!-- END DAY REMINDER BANNER -->
+  <div id="end-day-banner" class="hidden w-full max-w-md md:max-w-3xl mb-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl p-2.5 text-xs font-semibold items-center justify-between gap-2">
+    <span id="end-day-banner-text" class="flex-1">⚠️ End Day not run today.</span>
+    <div class="flex gap-1 shrink-0">
+      <button type="button" onclick="endDay()" class="px-2 py-0.5 bg-amber-700 text-white rounded-md text-[10px] font-bold">End Day now</button>
+      <button type="button" onclick="dismissEndDayBanner()" class="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md text-[10px] font-bold">Later</button>
+    </div>
+  </div>
+
+  <header class="w-full max-w-md md:max-w-3xl flex items-center justify-between gap-1.5 mb-2">
     <button type="button" id="btn-sidebar" onclick="toggleSidebar(true)" title="Settings" aria-label="Open settings"
             class="shrink-0 p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200 active:scale-95 transition text-slate-700">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -71,134 +85,183 @@
     </div>
   </header>
 
-  <main class="w-full max-w-md flex-1 flex flex-col justify-center gap-3 py-1">
-    <div>
-      <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600 block mb-1">Specials (Fixed Package Total)</span>
-      <div class="grid grid-cols-3 gap-2">
-        <button type="button" onclick="applySpecial('A')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
-          <span id="lbl-special-A-name" class="block text-xs font-black uppercase truncate">SPECIAL A</span>
-          <span id="lbl-special-A-sub" class="block text-[10px] opacity-80 font-medium">₱150 for 3 pcs</span>
-        </button>
-        <button type="button" onclick="applySpecial('B')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
-          <span id="lbl-special-B-name" class="block text-xs font-black uppercase truncate">SPECIAL B</span>
-          <span id="lbl-special-B-sub" class="block text-[10px] opacity-80 font-medium">₱250 for 6 pcs</span>
-        </button>
-        <button type="button" onclick="applySpecial('C')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
-          <span id="lbl-special-C-name" class="block text-xs font-black uppercase truncate">SPECIAL C</span>
-          <span id="lbl-special-C-sub" class="block text-[10px] opacity-80 font-medium">₱400 for 10 pcs</span>
-        </button>
-      </div>
-    </div>
-
-    <div id="active-mode-banner" class="hidden bg-purple-50 border border-purple-200 rounded-2xl p-2 flex items-center justify-between">
-      <span id="active-mode-text" class="text-[11px] font-bold text-purple-700"></span>
-      <button type="button" onclick="clearActiveMode()" class="text-[10px] text-purple-500 hover:text-purple-700 font-bold">Clear</button>
-    </div>
-
-    <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
-      <div class="flex justify-between items-center mb-1">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Unit Price</label>
-        <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
-      </div>
-      <button type="button" onclick="togglePriceOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
-        <span id="display-price" class="text-2xl font-extrabold text-slate-900 group-active:scale-95 transition">₱20.00</span>
-        <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Select Tier ▾</span>
-      </button>
-      <div id="price-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
-        <div id="tier-buttons" class="grid grid-cols-2 gap-2"></div>
-        <div class="flex gap-2 items-center">
-          <span class="text-xs font-medium text-slate-400">Custom:</span>
-          <input type="number" id="custom-price-input" min="0" step="0.01" placeholder="0.00" inputmode="decimal"
-                 oninput="applyCustomPrice(this.value)"
-                 onkeydown="if (event.key === 'Enter') { event.preventDefault(); addTransaction(); }"
-                 class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
-      <div class="flex justify-between items-center mb-1">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Quantity</label>
-        <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Adjust</span>
-      </div>
-      <div id="qty-display-container">
-        <button type="button" onclick="toggleQtyOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
-          <span id="display-qty" class="text-2xl font-extrabold text-slate-900 group-active:scale-95 transition">1 pc</span>
-          <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Quick Presets ▾</span>
-        </button>
-      </div>
-      <div id="qty-direct-input-container" class="hidden py-1">
-        <div class="flex items-center gap-2">
-          <input type="number" id="direct-qty-input" min="1" step="1" value="1" inputmode="numeric"
-                 oninput="applyDirectQty(this.value)"
-                 onkeydown="if (event.key === 'Enter') { event.preventDefault(); toggleQtyInputMode(false); addTransaction(); }"
-                 class="w-full bg-slate-50 border-2 border-emerald-500 rounded-2xl px-3 py-1.5 text-xl font-black text-slate-900 focus:outline-none">
-          <button type="button" onclick="toggleQtyInputMode(false)" class="bg-emerald-500 text-white font-bold px-3 py-2 rounded-2xl text-xs">OK</button>
-        </div>
-      </div>
-      <div id="qty-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
-        <div id="qty-preset-buttons" class="grid grid-cols-5 gap-1.5"></div>
-        <button type="button" onclick="toggleQtyInputMode(true)" class="w-full py-1.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-600">Enter exact quantity…</button>
-      </div>
-    </div>
-
-    <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200 relative">
-      <div class="flex justify-between items-center mb-1">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Name</label>
-        <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Select</span>
-      </div>
-      <button type="button" onclick="toggleNameOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
-        <span id="display-name" class="text-lg font-bold text-slate-800 group-active:scale-95 transition">no name</span>
-        <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Search / Saved ▾</span>
-      </button>
-      <div id="name-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
-        <div class="relative">
-          <input type="text" id="name-search-input" placeholder="Type customer name..." autocomplete="off"
-                 oninput="handleNameTyping(this.value)"
-                 onkeydown="if (event.key === 'Enter') { event.preventDefault(); addTransaction(); }"
-                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <div id="autocomplete-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-36 overflow-y-auto"></div>
-        </div>
+  <main class="w-full max-w-md md:max-w-3xl flex-1 flex flex-col justify-center py-1">
+    <div class="flex flex-col md:grid md:grid-cols-2 md:gap-3 gap-3">
+      <div class="flex flex-col gap-3">
         <div>
-          <span class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Saved Customers</span>
-          <div id="saved-customer-chips" class="flex flex-wrap gap-1"></div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600 block mb-1">Specials (Fixed Package Total)</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="applySpecial('A')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
+              <span id="lbl-special-A-name" class="block text-xs font-black uppercase truncate">SPECIAL A</span>
+              <span id="lbl-special-A-sub" class="block text-[10px] opacity-80 font-medium">₱150 for 3 pcs</span>
+            </button>
+            <button type="button" onclick="applySpecial('B')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
+              <span id="lbl-special-B-name" class="block text-xs font-black uppercase truncate">SPECIAL B</span>
+              <span id="lbl-special-B-sub" class="block text-[10px] opacity-80 font-medium">₱250 for 6 pcs</span>
+            </button>
+            <button type="button" onclick="applySpecial('C')" class="p-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
+              <span id="lbl-special-C-name" class="block text-xs font-black uppercase truncate">SPECIAL C</span>
+              <span id="lbl-special-C-sub" class="block text-[10px] opacity-80 font-medium">₱400 for 10 pcs</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="active-mode-banner" class="hidden bg-purple-50 border border-purple-200 rounded-2xl p-2 flex items-center justify-between">
+          <span id="active-mode-text" class="text-[11px] font-bold text-purple-700"></span>
+          <button type="button" onclick="clearActiveMode()" class="text-[10px] text-purple-500 hover:text-purple-700 font-bold">Clear</button>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Unit Price</label>
+            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
+          </div>
+          <button type="button" onclick="togglePriceOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
+            <span id="display-price" class="text-2xl font-extrabold text-slate-900 group-active:scale-95 transition">₱20.00</span>
+            <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Select Tier ▾</span>
+          </button>
+          <div id="price-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
+            <div id="tier-buttons" class="grid grid-cols-2 gap-2"></div>
+            <div class="flex gap-2 items-center">
+              <span class="text-xs font-medium text-slate-400">Custom:</span>
+              <input type="number" id="custom-price-input" min="0" step="0.01" placeholder="0.00" inputmode="decimal"
+                     oninput="applyCustomPrice(this.value)"
+                     onkeydown="if (event.key === 'Enter') { event.preventDefault(); addTransaction(); }"
+                     class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Quantity</label>
+            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Adjust</span>
+          </div>
+          <div id="qty-display-container">
+            <button type="button" onclick="toggleQtyOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
+              <span id="display-qty" class="text-2xl font-extrabold text-slate-900 group-active:scale-95 transition">1 pc</span>
+              <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Quick Presets ▾</span>
+            </button>
+          </div>
+          <div id="qty-direct-input-container" class="hidden py-1">
+            <div class="flex items-center gap-2">
+              <input type="number" id="direct-qty-input" min="1" step="1" value="1" inputmode="numeric"
+                     oninput="applyDirectQty(this.value)"
+                     onkeydown="if (event.key === 'Enter') { event.preventDefault(); toggleQtyInputMode(false); addTransaction(); }"
+                     class="w-full bg-slate-50 border-2 border-emerald-500 rounded-2xl px-3 py-1.5 text-xl font-black text-slate-900 focus:outline-none">
+              <button type="button" onclick="toggleQtyInputMode(false)" class="bg-emerald-500 text-white font-bold px-3 py-2 rounded-2xl text-xs">OK</button>
+            </div>
+          </div>
+          <div id="qty-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
+            <div id="qty-preset-buttons" class="grid grid-cols-5 gap-1.5"></div>
+            <button type="button" onclick="toggleQtyInputMode(true)" class="w-full py-1.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-600">Enter exact quantity…</button>
+          </div>
         </div>
       </div>
+
+      <div class="flex flex-col gap-3">
+        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200 relative">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Name</label>
+            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Select</span>
+          </div>
+          <button type="button" onclick="toggleNameOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
+            <span id="display-name" class="text-lg font-bold text-slate-800 group-active:scale-95 transition">no name</span>
+            <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Search / Saved ▾</span>
+          </button>
+          <div id="name-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
+            <div class="relative">
+              <input type="text" id="name-search-input" placeholder="Type customer name..." autocomplete="off"
+                     oninput="handleNameTyping(this.value)"
+                     onkeydown="if (event.key === 'Enter') { event.preventDefault(); addTransaction(); }"
+                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <div id="autocomplete-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-36 overflow-y-auto"></div>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Saved Customers</span>
+              <div id="saved-customer-chips" class="flex flex-wrap gap-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Delivery</label>
+            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
+          </div>
+          <button type="button" onclick="toggleDeliveryOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
+            <span id="display-delivery" class="text-lg font-bold text-slate-800 group-active:scale-95 transition">No</span>
+            <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Select Rider ▾</span>
+          </button>
+          <div id="delivery-options" class="hidden mt-2 pt-2 border-t border-slate-100">
+            <div id="rider-buttons" class="grid grid-cols-3 gap-2"></div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Container</label>
+            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
+          </div>
+          <button type="button" onclick="toggleContainerOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
+            <span id="display-container" class="text-lg font-bold text-slate-800 group-active:scale-95 transition">None</span>
+            <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Set Container ▾</span>
+          </button>
+          <div id="container-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Type</span>
+              <div id="container-type-buttons" class="grid grid-cols-3 gap-1.5"></div>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Status</span>
+              <div id="container-status-buttons" class="grid grid-cols-2 gap-1.5"></div>
+            </div>
+            <div class="flex gap-2 items-center">
+              <span class="text-xs font-medium text-slate-400">Count:</span>
+              <input type="number" id="container-count-input" min="0" step="1" value="0" inputmode="numeric"
+                     oninput="applyContainerCount(this.value)"
+                     class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+        </div>
+
+        <div id="cash-card" class="hidden bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Cash Received</label>
+            <span id="change-display" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">Change: ₱0.00</span>
+          </div>
+          <input id="cash-input" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" oninput="updateChange()"
+                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <div class="flex gap-1.5 mt-2">
+            <button type="button" onclick="setCash('exact')" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl">Exact</button>
+            <button type="button" onclick="setCash(100)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱100</button>
+            <button type="button" onclick="setCash(500)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱500</button>
+            <button type="button" onclick="setCash(1000)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱1000</button>
+          </div>
+        </div>
+
+        <button type="button" onclick="addTransaction()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-extrabold py-4 rounded-3xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition">
+          <span class="text-2xl font-black">+</span>
+          <span class="text-base tracking-wide uppercase">Add Order (<span id="total-price-preview">₱20.00</span>)</span>
+        </button>
+      </div>
     </div>
 
-    <div id="cash-card" class="hidden bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
-      <div class="flex justify-between items-center mb-1">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Cash Received</label>
-        <span id="change-display" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">Change: ₱0.00</span>
-      </div>
-      <input id="cash-input" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" oninput="updateChange()"
-             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-      <div class="flex gap-1.5 mt-2">
-        <button type="button" onclick="setCash('exact')" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl">Exact</button>
-        <button type="button" onclick="setCash(100)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱100</button>
-        <button type="button" onclick="setCash(500)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱500</button>
-        <button type="button" onclick="setCash(1000)" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl border border-slate-200">₱1000</button>
-      </div>
-    </div>
-
-    <button type="button" onclick="addTransaction()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-extrabold py-4 rounded-3xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition">
-      <span class="text-2xl font-black">+</span>
-      <span class="text-base tracking-wide uppercase">Add Order (<span id="total-price-preview">₱20.00</span>)</span>
-    </button>
-
-    <div id="today-strip" class="text-center text-[11px] font-semibold text-slate-500">Today: 0 orders · ₱0.00</div>
-    <div id="checkout-goal-bar" class="hidden">
-      <div class="flex justify-between text-[10px] font-semibold text-indigo-600 mb-0.5">
-        <span>Goal progress</span>
-        <span id="checkout-goal-text"></span>
-      </div>
-      <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-        <div id="checkout-goal-fill" class="h-full bg-indigo-500 rounded-full transition-all" style="width:0%"></div>
+    <div class="flex flex-col gap-3 mt-3">
+      <div id="today-strip" class="text-center text-[11px] font-semibold text-slate-500">Today: 0 orders · ₱0.00</div>
+      <div id="checkout-goal-bar" class="hidden">
+        <div class="flex justify-between text-[10px] font-semibold text-indigo-600 mb-0.5">
+          <span>Goal progress</span>
+          <span id="checkout-goal-text"></span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div id="checkout-goal-fill" class="h-full bg-indigo-500 rounded-full transition-all" style="width:0%"></div>
+        </div>
       </div>
     </div>
   </main>
 
-  <footer class="w-full max-w-md mt-1">
+  <footer class="w-full max-w-md md:max-w-3xl mt-1">
     <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block text-center mb-1">Quick Loadouts (Price x Qty)</span>
     <div class="grid grid-cols-3 gap-2">
       <button type="button" onclick="applyLoadout('A')" class="p-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-2xl text-center shadow-sm transition">
@@ -219,7 +282,7 @@
   <!-- SIDEBAR -->
   <div id="sidebar" onclick="if (event.target === this) toggleSidebar(false)"
        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex justify-start">
-    <div class="w-full max-w-xs bg-white h-full p-4 flex flex-col justify-between overflow-y-auto">
+    <div class="w-full max-w-xs md:max-w-sm bg-white h-full p-4 flex flex-col justify-between overflow-y-auto">
       <div class="space-y-2">
         <div class="flex items-center justify-between border-b pb-2 mb-2">
           <h2 class="text-base font-bold text-slate-800">Settings</h2>
@@ -232,7 +295,8 @@
             <span id="end-day-badge" class="hidden px-1.5 py-0.5 bg-indigo-600 text-white text-[9px] font-bold rounded-full">open</span>
           </div>
           <button type="button" onclick="endDay()" class="w-full py-2.5 bg-indigo-700 hover:bg-indigo-800 active:scale-95 text-white text-xs font-bold rounded-xl">🌙 End Day</button>
-          <span class="text-[10px] text-indigo-600/80 block leading-snug">Creates one final daily export, archives today's finished orders, and clears the board for tomorrow.</span>
+          <span class="text-[10px] text-indigo-600/80 block leading-snug">📅 Run this <strong>once per day, before closing</strong>. Produces the daily file the accounting app reads. Archives finished orders and clears the board for tomorrow.</span>
+          <span class="text-[10px] text-indigo-500/70 block leading-snug">This is the primary daily export. If you forget, the reminder banner will nag you.</span>
         </div>
 
         <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
@@ -248,17 +312,17 @@
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-purple-800">Specials (Fixed Total)</span><span class="chev text-purple-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-1.5 text-xs">
             <div><label class="text-[10px] text-purple-600 font-bold">A (Name / Total / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-sp-A-name" type="text" class="p-1 bg-white border rounded text-xs" value="SPECIAL A">
-              <input id="cfg-sp-A-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="150">
-              <input id="cfg-sp-A-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="3"></div></div>
+              <input id="cfg-sp-A-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="SPECIAL A">
+              <input id="cfg-sp-A-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="150">
+              <input id="cfg-sp-A-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="3"></div></div>
             <div><label class="text-[10px] text-purple-600 font-bold">B (Name / Total / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-sp-B-name" type="text" class="p-1 bg-white border rounded text-xs" value="SPECIAL B">
-              <input id="cfg-sp-B-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="250">
-              <input id="cfg-sp-B-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="6"></div></div>
+              <input id="cfg-sp-B-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="SPECIAL B">
+              <input id="cfg-sp-B-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="250">
+              <input id="cfg-sp-B-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="6"></div></div>
             <div><label class="text-[10px] text-purple-600 font-bold">C (Name / Total / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-sp-C-name" type="text" class="p-1 bg-white border rounded text-xs" value="SPECIAL C">
-              <input id="cfg-sp-C-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="400">
-              <input id="cfg-sp-C-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="10"></div></div>
+              <input id="cfg-sp-C-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="SPECIAL C">
+              <input id="cfg-sp-C-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="400">
+              <input id="cfg-sp-C-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="10"></div></div>
           </div>
         </details>
 
@@ -266,17 +330,39 @@
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-blue-800">Loadouts (Unit × Qty)</span><span class="chev text-blue-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-1.5 text-xs">
             <div><label class="text-[10px] text-blue-600 font-bold">A (Name / Unit / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-lo-A-name" type="text" class="p-1 bg-white border rounded text-xs" value="LOADOUT A">
-              <input id="cfg-lo-A-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="100">
-              <input id="cfg-lo-A-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="1"></div></div>
+              <input id="cfg-lo-A-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="LOADOUT A">
+              <input id="cfg-lo-A-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="100">
+              <input id="cfg-lo-A-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="1"></div></div>
             <div><label class="text-[10px] text-blue-600 font-bold">B (Name / Unit / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-lo-B-name" type="text" class="p-1 bg-white border rounded text-xs" value="LOADOUT B">
-              <input id="cfg-lo-B-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="80">
-              <input id="cfg-lo-B-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="5"></div></div>
+              <input id="cfg-lo-B-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="LOADOUT B">
+              <input id="cfg-lo-B-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="80">
+              <input id="cfg-lo-B-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="5"></div></div>
             <div><label class="text-[10px] text-blue-600 font-bold">C (Name / Unit / Qty)</label><div class="grid grid-cols-3 gap-1 mt-0.5">
-              <input id="cfg-lo-C-name" type="text" class="p-1 bg-white border rounded text-xs" value="LOADOUT C">
-              <input id="cfg-lo-C-price" type="number" min="0" step="0.01" class="p-1 bg-white border rounded text-xs" value="60">
-              <input id="cfg-lo-C-qty" type="number" min="1" step="1" class="p-1 bg-white border rounded text-xs" value="20"></div></div>
+              <input id="cfg-lo-C-name" type="text" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="LOADOUT C">
+              <input id="cfg-lo-C-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="60">
+              <input id="cfg-lo-C-qty" type="number" min="1" step="1" onchange="saveFromEditors()" class="p-1 bg-white border rounded text-xs" value="20"></div></div>
+          </div>
+        </details>
+
+        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
+          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Riders</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
+          <div class="px-3 pb-3 space-y-1.5 text-xs">
+            <div><label class="text-[10px] text-slate-600 font-bold">Rider A</label>
+              <input id="cfg-rider-a" type="text" onchange="saveFromEditors()" class="w-full p-1 bg-white border rounded text-xs mt-0.5" value="Rider A"></div>
+            <div><label class="text-[10px] text-slate-600 font-bold">Rider B</label>
+              <input id="cfg-rider-b" type="text" onchange="saveFromEditors()" class="w-full p-1 bg-white border rounded text-xs mt-0.5" value="Rider B"></div>
+            <span class="text-[10px] text-slate-400 block">Display names only — internal IDs stay fixed for schema compatibility.</span>
+          </div>
+        </details>
+
+        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
+          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Container Types</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
+          <div class="px-3 pb-3 space-y-1.5 text-xs">
+            <div><label class="text-[10px] text-slate-600 font-bold">Bilog</label>
+              <input id="cfg-container-bilog" type="text" onchange="saveFromEditors()" class="w-full p-1 bg-white border rounded text-xs mt-0.5" value="Bilog"></div>
+            <div><label class="text-[10px] text-slate-600 font-bold">Faucet</label>
+              <input id="cfg-container-faucet" type="text" onchange="saveFromEditors()" class="w-full p-1 bg-white border rounded text-xs mt-0.5" value="Faucet"></div>
+            <span class="text-[10px] text-slate-400 block">Display names only — internal IDs (bilog/faucet) stay fixed for schema compatibility.</span>
           </div>
         </details>
 
@@ -300,7 +386,7 @@
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Cash Received</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-1">
             <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
-              <input id="cfg-show-cash" type="checkbox" class="w-4 h-4 accent-emerald-600">
+              <input id="cfg-show-cash" type="checkbox" onchange="saveFromEditors()" class="w-4 h-4 accent-emerald-600">
               <span>Show cash &amp; change on checkout</span>
             </label>
           </div>
@@ -311,9 +397,22 @@
           <div class="px-3 pb-3 space-y-1">
             <div class="flex gap-2 items-center">
               <span class="text-sm font-bold text-slate-500">₱</span>
-              <input id="cfg-ref-price" type="number" min="0" step="0.01" class="flex-1 p-1 bg-white border rounded text-sm font-bold" value="20">
+              <input id="cfg-ref-price" type="number" min="0" step="0.01" onchange="saveFromEditors()" class="flex-1 p-1 bg-white border rounded text-sm font-bold" value="20">
             </div>
             <span class="text-[10px] text-slate-400 block">Prefills checkout price and powers the Goal estimate.</span>
+          </div>
+        </details>
+
+        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
+          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Text Scale</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
+          <div class="px-3 pb-3 space-y-2">
+            <div class="grid grid-cols-4 gap-1">
+              <button type="button" data-scale="auto" onclick="setTextScale('auto')" class="py-2 rounded-xl text-[11px] font-bold">Auto</button>
+              <button type="button" data-scale="small" onclick="setTextScale('small')" class="py-2 rounded-xl text-[11px] font-bold">S</button>
+              <button type="button" data-scale="medium" onclick="setTextScale('medium')" class="py-2 rounded-xl text-[11px] font-bold">M</button>
+              <button type="button" data-scale="large" onclick="setTextScale('large')" class="py-2 rounded-xl text-[11px] font-bold">L</button>
+            </div>
+            <span class="text-[10px] text-slate-400 block">Auto follows your device setting. S/M/L override.</span>
           </div>
         </details>
 
@@ -323,23 +422,24 @@
             <div id="archive-info" class="text-[11px] text-slate-600">—</div>
             <div class="flex gap-1">
               <button type="button" onclick="exportArchive()" class="flex-1 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded-lg">Export archive</button>
-              <button type="button" onclick="purgeArchive()" class="flex-1 py-1.5 bg-red-600 text-white text-[10px] font-bold rounded-lg">Purge archive</button>
+              <button type="button" onclick="purgeArchive()" class="flex-1 py-1.5 bg-red-600 text-white text-[10px] font-bold rounded-lg">Delete archive</button>
             </div>
           </div>
         </details>
-
-        <button type="button" onclick="saveAllSettings()" class="no-print w-full py-2 bg-slate-800 text-white font-bold text-xs rounded-xl mt-2">Save All Settings</button>
       </div>
 
       <div class="no-print space-y-2 pt-2 border-t border-slate-100 mt-3">
         <button id="btn-install" type="button" onclick="promptInstall()" class="hidden w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📲 Install App</button>
-        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Accounting</div>
-        <button type="button" onclick="exportToAccounting()" class="w-full py-2.5 bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📤 Export for Accounting (JSON)</button>
-        <button type="button" onclick="downloadSchemaJSON()" class="w-full py-2.5 bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📐 Download schema.json</button>
-        <button type="button" onclick="downloadSchemaMD()" class="w-full py-2.5 bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📐 Download schema.md</button>
+
+        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Recovery</div>
+        <button type="button" onclick="exportToAccounting()" class="w-full py-2.5 bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📦 Full Recovery Export (JSON)</button>
+        <span class="text-[10px] text-slate-400 block leading-snug">Full snapshot <strong>including archive</strong>. Only for disaster recovery, or for first-time setup of the accounting app. <strong>Do not use daily</strong> — use End Day for that.</span>
+
         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Backup & Human Exports</div>
         <button type="button" onclick="backupJSON()" class="w-full py-2.5 bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">💾 Backup JSON (all)</button>
+        <span class="text-[10px] text-slate-400 block leading-snug">App state: settings, presets, customers, orders, archive, column order. <strong>The only file that can restore this app</strong> on a new device.</span>
         <button type="button" onclick="restoreJSON()" class="w-full py-2.5 bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📥 Restore JSON</button>
+        <span class="text-[10px] text-slate-400 block leading-snug">Load a Backup JSON file to restore the app.</span>
         <button type="button" onclick="exportToExcel()" class="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📊 Export Excel</button>
         <button type="button" onclick="exportToCSV()" class="w-full py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📄 Export CSV</button>
         <button type="button" onclick="printBoard()" class="w-full py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">🖨️ Print Order Board</button>
@@ -347,7 +447,7 @@
     </div>
   </div>
 
-  <!-- ORDER BOARD (slim) -->
+  <!-- ORDER BOARD -->
   <div id="board-view" class="fixed inset-0 bg-slate-100 z-50 flex-col">
     <div class="no-print flex items-center justify-between gap-2 bg-white border-b border-slate-200 px-3 py-2 shrink-0">
       <div class="flex items-center gap-2 min-w-0">
@@ -360,7 +460,7 @@
       <div class="flex items-center gap-1.5 shrink-0">
         <button type="button" onclick="addCustomColumn()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl">+ Column</button>
         <button type="button" onclick="printBoard()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold rounded-xl">🖨️ Print</button>
-        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold rounded-xl">📤 Accounting</button>
+        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl">📦 Recovery</button>
       </div>
     </div>
     <div class="flex-1 overflow-auto">
@@ -369,7 +469,8 @@
         <div id="board-bulk-bar" class="hidden bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 mb-2 flex items-center justify-between gap-2 no-print">
           <span id="board-bulk-count" class="text-[11px] font-bold text-slate-700">0 selected</span>
           <div class="flex gap-1">
-            <button type="button" onclick="bulkSetStatus('delivered')" class="px-2 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded">Delivered</button>
+            <button type="button" onclick="bulkSetStatus('delivered')" class="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">Delivered</button>
+            <button type="button" onclick="bulkSetStatus('paid')" class="px-2 py-1 bg-green-600 text-white text-[10px] font-bold rounded">Paid</button>
             <button type="button" onclick="bulkSetStatus('cancelled')" class="px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded">Cancelled</button>
             <button type="button" onclick="clearSelection()" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] font-bold rounded">Clear</button>
           </div>
@@ -381,7 +482,7 @@
       </div>
     </div>
     <div class="no-print shrink-0 px-3 py-1.5 text-[10px] text-slate-500 bg-white border-t border-slate-200 text-center">
-      Only delivered orders appear in the Sales Table — set status here.
+      Only paid orders appear in the Sales Table — mark paid to finalize.
     </div>
   </div>
 
@@ -392,13 +493,13 @@
         <button type="button" onclick="closeTableView()" class="p-1.5 text-slate-500 hover:text-slate-800 font-bold text-lg leading-none rounded-lg hover:bg-slate-100" aria-label="Close">✕</button>
         <div class="min-w-0">
           <h2 class="text-sm font-bold text-slate-800 leading-tight">Sales Table</h2>
-          <p class="text-[10px] text-slate-400 leading-tight truncate">Delivered orders only · drag headers to reorder</p>
+          <p class="text-[10px] text-slate-400 leading-tight truncate">Paid orders only · drag headers to reorder</p>
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         <button type="button" onclick="resetColumnOrder()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl">Reset Columns</button>
         <button type="button" onclick="printTable()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold rounded-xl">🖨️ Print</button>
-        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold rounded-xl">📤 Accounting</button>
+        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl">📦 Recovery</button>
         <button type="button" onclick="exportToCSV()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-xl">📄 CSV</button>
       </div>
     </div>
@@ -406,7 +507,7 @@
       <table id="sales-table" class="min-w-[1100px] w-full text-xs bg-white rounded-xl overflow-hidden shadow-sm"></table>
     </div>
     <div class="no-print shrink-0 px-3 py-1.5 text-[10px] text-slate-500 bg-white border-t border-slate-200 text-center">
-      Delivered only. Rows are soft-deleted (voided) — they stay in exports for audit.
+      Paid only. Rows are soft-deleted (voided) — they stay in exports for audit.
       <span id="table-last-export" class="block text-slate-400"></span>
     </div>
   </div>
@@ -414,40 +515,41 @@
   <!-- APP MODAL -->
   <div id="app-modal" onclick="if (event.target === this) closeModal(true)"
        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-4 space-y-3" role="dialog" aria-modal="true">
-      <h3 id="modal-title" class="text-sm font-bold text-slate-800"></h3>
-      <p id="modal-desc" class="text-[11px] text-slate-500 leading-snug whitespace-pre-line"></p>
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg p-4 md:p-6 space-y-3 md:space-y-4" role="dialog" aria-modal="true">
+      <h3 id="modal-title" class="text-sm md:text-lg font-bold text-slate-800"></h3>
+      <p id="modal-desc" class="text-[11px] md:text-base text-slate-600 leading-snug md:leading-relaxed whitespace-pre-line"></p>
       <input id="modal-input" type="text" autocomplete="off"
              onkeydown="if (event.key === 'Enter') { event.preventDefault(); submitModal(); }"
-             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      <p class="text-[10px] md:text-xs text-slate-400 text-center pt-2 border-t border-slate-100">Tap Cancel or outside the box to dismiss.</p>
       <div class="flex gap-2">
-        <button type="button" onclick="closeModal(true)" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancel</button>
-        <button type="button" id="modal-ok" onclick="submitModal()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl">OK</button>
+        <button type="button" onclick="closeModal(true)" class="flex-1 py-2 md:py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs md:text-sm rounded-xl">Cancel</button>
+        <button type="button" id="modal-ok" onclick="submitModal()" class="flex-1 py-2 md:py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs md:text-sm rounded-xl">OK</button>
       </div>
     </div>
   </div>
 
   <!-- MULTI-TAB WARNING -->
   <div id="multi-tab-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[75] items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-3 text-center" role="alertdialog" aria-modal="true">
-      <div class="text-3xl">⚠️</div>
-      <h3 class="text-sm font-bold text-slate-800">Another instance of this app is open</h3>
-      <p class="text-xs text-slate-600 leading-relaxed">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg p-5 md:p-7 space-y-3 md:space-y-4 text-center" role="alertdialog" aria-modal="true">
+      <div class="text-3xl md:text-5xl">⚠️</div>
+      <h3 class="text-sm md:text-lg font-bold text-slate-800">Another instance of this app is open</h3>
+      <p class="text-xs md:text-base text-slate-600 leading-relaxed">
         This app is already running in another tab or window. Using multiple copies at the same time can cause orders to be lost or overwritten.
       </p>
-      <p class="text-xs text-slate-700 font-semibold">
+      <p class="text-xs md:text-base text-slate-700 font-semibold">
         Please close the other tab and use only one window.
       </p>
-      <button type="button" onclick="dismissMultiTab()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl">I understand</button>
+      <button type="button" onclick="dismissMultiTab()" class="w-full py-2 md:py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs md:text-sm rounded-xl">I understand</button>
     </div>
   </div>
 
   <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg max-w-[90%] text-center"></div>
 
   <script>
-    const SCHEMA_VERSION = 1;
+    const SCHEMA_VERSION = 2;
     const APP_NAME = 'checkout-ledger';
-    const APP_VERSION = '1.0.0';
+    const APP_VERSION = '2.0.0';
     const APP_TIMEZONE = (function () {
       try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila'; }
       catch (_) { return 'Asia/Manila'; }
@@ -572,7 +674,7 @@
     function coveredDates(orders) {
       const dates = new Set();
       orders.forEach(t => {
-        const d = deliveredAt(t);
+        const d = paidAt(t) || deliveredAt(t);
         if (d) dates.add(localDateStr(d));
       });
       return Array.from(dates).sort();
@@ -583,6 +685,7 @@
       { key: 'preparing',   label: 'Preparing',   cls: 'bg-amber-100  text-amber-700   border-amber-200'  },
       { key: 'otw',         label: 'On the Way',  cls: 'bg-blue-100   text-blue-700    border-blue-200'   },
       { key: 'delivered',   label: 'Delivered',   cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+      { key: 'paid',        label: 'Paid',        cls: 'bg-green-200  text-green-900   border-green-300' },
       { key: 'cancelled',   label: 'Cancelled',   cls: 'bg-red-100    text-red-700     border-red-200'    }
     ];
     function statusOf(tx) {
@@ -599,6 +702,13 @@
       }
       return null;
     }
+    function paidAt(tx) {
+      if (!tx.statusHistory) return null;
+      for (let i = tx.statusHistory.length - 1; i >= 0; i--) {
+        if (tx.statusHistory[i].status === 'paid') return tx.statusHistory[i].at;
+      }
+      return null;
+    }
     function minutesToDeliver(tx) {
       const d = deliveredAt(tx);
       if (!d) return null;
@@ -611,6 +721,15 @@
     const defaultSettings = {
       currency: '₱', refUnitPrice: 20, goal: 0,
       lastBackupAt: 0, lastEndDayAt: 0, showCash: false,
+      textScale: 'auto',
+      riders: {
+        rider_a: { label: 'Rider A' },
+        rider_b: { label: 'Rider B' }
+      },
+      containerTypes: {
+        bilog: { label: 'Bilog' },
+        faucet: { label: 'Faucet' }
+      },
       tiers: [
         { name: 'Standard', price: 100 }, { name: 'Promo', price: 80 },
         { name: 'Family', price: 70 }, { name: 'Bulk', price: 60 }
@@ -627,6 +746,23 @@
       cfg.lastBackupAt = Math.max(0, toNum(saved.lastBackupAt, 0));
       cfg.lastEndDayAt = Math.max(0, toNum(saved.lastEndDayAt, 0));
       cfg.showCash = !!saved.showCash;
+      cfg.textScale = ['auto','small','medium','large'].includes(saved.textScale) ? saved.textScale : 'auto';
+      if (saved.riders && typeof saved.riders === 'object') {
+        ['rider_a', 'rider_b'].forEach(k => {
+          const r = saved.riders[k];
+          if (r && typeof r === 'object' && typeof r.label === 'string' && r.label.trim()) {
+            cfg.riders[k] = { label: r.label.trim() };
+          }
+        });
+      }
+      if (saved.containerTypes && typeof saved.containerTypes === 'object') {
+        ['bilog', 'faucet'].forEach(k => {
+          const c = saved.containerTypes[k];
+          if (c && typeof c === 'object' && typeof c.label === 'string' && c.label.trim()) {
+            cfg.containerTypes[k] = { label: c.label.trim() };
+          }
+        });
+      }
       if (Array.isArray(saved.tiers)) {
         const t = saved.tiers.filter(x => x && typeof x === 'object').map((x, i) => ({
           name: (typeof x.name === 'string' && x.name.trim()) ? x.name.trim() : `Tier ${i + 1}`,
@@ -653,6 +789,22 @@
       return cfg;
     }
     let appSettings = mergeSettings(loadJSON(KEY_SETTINGS, null));
+
+    function riderLabel(key) {
+      if (!key) return '';
+      const r = (appSettings.riders || {})[key];
+      return r ? r.label : key;
+    }
+    function containerTypeLabel(key) {
+      if (!key) return '';
+      const ct = (appSettings.containerTypes || {})[key];
+      return ct ? ct.label : key;
+    }
+    function containerStatusLabel(key) {
+      if (key === 'given') return 'Given';
+      if (key === 'to_be_given') return 'To be given';
+      return '';
+    }
 
     const defaultPresets = {
       specials: {
@@ -703,8 +855,20 @@
       transactions.forEach(t => {
         if (t.id != null) t.id = String(t.id);
         if (!t.updatedAt) t.updatedAt = toNum(new Date(t.date).getTime(), Date.now());
-        if (!t.statusHistory && statusOf(t) === 'delivered') {
-          t.statusHistory = [{ status: 'delivered', at: new Date(t.updatedAt || Date.now()).toISOString() }];
+        if (t.rider === undefined) t.rider = null;
+        if (t.container_type === undefined) t.container_type = null;
+        if (t.container_status === undefined) t.container_status = null;
+        if (t.container_count === undefined) t.container_count = 0;
+        if (t.isSpecial && !t.special_name) t.special_name = 'Special';
+        if (t.status === 'delivered') {
+          const delAt = deliveredAt(t) || new Date(t.updatedAt || Date.now()).toISOString();
+          t.status = 'paid';
+          t.statusHistory = t.statusHistory || [];
+          const alreadyPaid = t.statusHistory.some(h => h.status === 'paid');
+          if (!alreadyPaid) t.statusHistory.push({ status: 'paid', at: delAt });
+        }
+        if (!t.statusHistory && statusOf(t) === 'paid') {
+          t.statusHistory = [{ status: 'paid', at: new Date(t.updatedAt || Date.now()).toISOString() }];
         }
       });
     })();
@@ -714,11 +878,19 @@
     let currentName = 'no name';
     let isSpecialOverride = false;
     let specialFixedTotal = 0;
+    let currentSpecialName = '';
     let priceTouched = false;
+
+    let currentRider = null;
+    let currentContainerType = null;
+    let currentContainerStatus = null;
+    let currentContainerCount = 0;
+
+    let endDayBannerDismissedOn = null;
 
     let boardFilter = 'all';
     let boardSearch = '';
-    let boardShowDelivered = false;
+    let boardShowPaid = false;
     let boardShowVoided = false;
     let selectedTx = new Set();
 
@@ -726,10 +898,12 @@
       idx: { label: '#' }, customer: { label: 'Customer Name' },
       qty: { label: 'Quantity' }, price: { label: 'Unit Price' }, total: { label: 'Total Price' },
       date: { label: 'Date' }, time: { label: 'Time' },
-      deliveredAt: { label: 'Delivered At' }, minutesToDeliver: { label: 'Minutes to Deliver' },
+      deliveredAt: { label: 'Delivered At' }, paidAt: { label: 'Paid At' },
+      rider: { label: 'Rider' }, container: { label: 'Container' },
+      minutesToDeliver: { label: 'Minutes to Deliver' },
       actions: { label: 'Actions' }
     };
-    const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+    const DEFAULT_COLUMN_ORDER = ['idx', 'customer', 'qty', 'price', 'total', 'date', 'time', 'deliveredAt', 'paidAt', 'rider', 'container', 'minutesToDeliver', 'actions'];
     function loadColumnOrder() {
       const saved = loadJSON(KEY_TABLE_COLS, null);
       const valid = Object.keys(COLUMN_DEFS);
@@ -792,12 +966,21 @@
       const input = document.getElementById('modal-input');
       const before = modalSubmitHandler;
       const result = h(input ? input.value : '');
-      // If the handler opened a new modal (chained modals), don't close it
-      if (modalSubmitHandler !== null && modalSubmitHandler !== before) {
-        return;
-      }
+      if (modalSubmitHandler !== null && modalSubmitHandler !== before) return;
       const keep = result === false;
       if (!keep) closeModal(false);
+    }
+    function confirmDelete(opts) {
+      const item = opts.item || '';
+      const instruction = opts.instruction || 'This cannot be undone.';
+      const desc = `${item}\n\n${instruction}`.trim();
+      openConfirmModal({
+        title: opts.title || 'Delete?',
+        desc: desc,
+        okLabel: opts.okLabel || 'Delete',
+        onConfirm: opts.onConfirm,
+        onCancel: opts.onCancel
+      });
     }
     (function focusTrap() {
       const m = document.getElementById('app-modal');
@@ -818,7 +1001,7 @@
       if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
     }
 
-    const PANEL_IDS = ['price-options', 'qty-options', 'name-options', 'autocomplete-suggestions'];
+    const PANEL_IDS = ['price-options', 'qty-options', 'name-options', 'autocomplete-suggestions', 'delivery-options', 'container-options'];
     function closePanels(exceptId) {
       PANEL_IDS.forEach(id => { if (id === exceptId) return; const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
     }
@@ -844,6 +1027,8 @@
       if (target.closest('[onclick*="togglePriceOptions"]') ||
           target.closest('[onclick*="toggleQtyOptions"]') ||
           target.closest('[onclick*="toggleNameOptions"]') ||
+          target.closest('[onclick*="toggleDeliveryOptions"]') ||
+          target.closest('[onclick*="toggleContainerOptions"]') ||
           target.closest('[onclick*="toggleQtyInputMode"]')) return;
       closePanels();
     });
@@ -860,15 +1045,21 @@
         const sp = presetsConfig.specials[k];
         document.getElementById(`lbl-special-${k}-name`).innerText = sp.name;
         document.getElementById(`lbl-special-${k}-sub`).innerText = `${moneyShort(sp.total)} for ${sp.qty} pcs`;
-        document.getElementById(`cfg-sp-${k}-name`).value = sp.name;
-        document.getElementById(`cfg-sp-${k}-price`).value = sp.total;
-        document.getElementById(`cfg-sp-${k}-qty`).value = sp.qty;
+        const spNameEl = document.getElementById(`cfg-sp-${k}-name`);
+        const spPriceEl = document.getElementById(`cfg-sp-${k}-price`);
+        const spQtyEl = document.getElementById(`cfg-sp-${k}-qty`);
+        if (spNameEl && document.activeElement !== spNameEl) spNameEl.value = sp.name;
+        if (spPriceEl && document.activeElement !== spPriceEl) spPriceEl.value = sp.total;
+        if (spQtyEl && document.activeElement !== spQtyEl) spQtyEl.value = sp.qty;
         const lo = presetsConfig.loadouts[k];
         document.getElementById(`lbl-loadout-${k}-name`).innerText = lo.name;
         document.getElementById(`lbl-loadout-${k}-sub`).innerText = `${moneyShort(lo.price)} x ${lo.qty} pc${lo.qty > 1 ? 's' : ''}`;
-        document.getElementById(`cfg-lo-${k}-name`).value = lo.name;
-        document.getElementById(`cfg-lo-${k}-price`).value = lo.price;
-        document.getElementById(`cfg-lo-${k}-qty`).value = lo.qty;
+        const loNameEl = document.getElementById(`cfg-lo-${k}-name`);
+        const loPriceEl = document.getElementById(`cfg-lo-${k}-price`);
+        const loQtyEl = document.getElementById(`cfg-lo-${k}-qty`);
+        if (loNameEl && document.activeElement !== loNameEl) loNameEl.value = lo.name;
+        if (loPriceEl && document.activeElement !== loPriceEl) loPriceEl.value = lo.price;
+        if (loQtyEl && document.activeElement !== loQtyEl) loQtyEl.value = lo.qty;
       });
     }
     function renderTierButtons() {
@@ -896,7 +1087,7 @@
     function showActiveMode(text) { document.getElementById('active-mode-text').textContent = text; document.getElementById('active-mode-banner').classList.remove('hidden'); }
     function hideActiveMode() { document.getElementById('active-mode-banner').classList.add('hidden'); }
     function clearActiveMode() {
-      isSpecialOverride = false; priceTouched = false;
+      isSpecialOverride = false; priceTouched = false; currentSpecialName = '';
       currentPrice = appSettings.refUnitPrice; currentQty = 1;
       setDisplayedPrice(currentPrice); setDisplayedQty(1);
       hideActiveMode(); updateTotalPreview();
@@ -906,6 +1097,7 @@
       closePanels();
       isSpecialOverride = true; priceTouched = true;
       specialFixedTotal = sp.total; currentQty = sp.qty;
+      currentSpecialName = sp.name;
       currentPrice = sp.qty > 0 ? sp.total / sp.qty : 0;
       document.getElementById('display-price').innerText = 'Fixed ' + money(sp.total);
       setDisplayedQty(sp.qty);
@@ -915,7 +1107,7 @@
     function applyLoadout(type) {
       const lo = presetsConfig.loadouts[type]; if (!lo) return;
       closePanels();
-      isSpecialOverride = false; priceTouched = true;
+      isSpecialOverride = false; priceTouched = true; currentSpecialName = '';
       currentPrice = lo.price; currentQty = lo.qty;
       setDisplayedPrice(lo.price); setDisplayedQty(lo.qty);
       showActiveMode(`${lo.name} active · ${moneyShort(lo.price)} × ${lo.qty}`);
@@ -923,7 +1115,7 @@
     }
     function togglePriceOptions() { togglePanel('price-options'); }
     function setPrice(v) {
-      isSpecialOverride = false; priceTouched = true;
+      isSpecialOverride = false; priceTouched = true; currentSpecialName = '';
       currentPrice = Math.max(0, toNum(v, 0));
       setDisplayedPrice(currentPrice); hideActiveMode(); updateTotalPreview();
     }
@@ -939,6 +1131,96 @@
     }
     function selectQty(v) { isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); closePanels(); updateTotalPreview(); }
     function applyDirectQty(v) { isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); updateTotalPreview(); }
+
+    function updateDeliveryDisplay() {
+      const el = document.getElementById('display-delivery');
+      if (!el) return;
+      el.textContent = currentRider ? riderLabel(currentRider) : 'No';
+    }
+    function updateContainerDisplay() {
+      const el = document.getElementById('display-container');
+      if (!el) return;
+      if (!currentContainerType) { el.textContent = 'None'; return; }
+      const typeLabel = containerTypeLabel(currentContainerType);
+      const statusLabel = containerStatusLabel(currentContainerStatus);
+      let str = typeLabel;
+      if (currentContainerCount > 0) str = currentContainerCount + '× ' + typeLabel;
+      if (statusLabel) str += ' (' + statusLabel + ')';
+      el.textContent = str;
+    }
+    function renderRiderButtons() {
+      const c = document.getElementById('rider-buttons'); if (!c) return;
+      c.innerHTML = '';
+      const makeBtn = (label, key) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = currentRider === key
+          ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
+          : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
+        b.textContent = label;
+        b.onclick = () => { currentRider = key; updateDeliveryDisplay(); renderRiderButtons(); closePanels(); };
+        c.appendChild(b);
+      };
+      makeBtn('No', null);
+      makeBtn(riderLabel('rider_a'), 'rider_a');
+      makeBtn(riderLabel('rider_b'), 'rider_b');
+    }
+    function renderContainerTypeButtons() {
+      const c = document.getElementById('container-type-buttons'); if (!c) return;
+      c.innerHTML = '';
+      const makeBtn = (label, key) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = currentContainerType === key
+          ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
+          : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
+        b.textContent = label;
+        b.onclick = () => {
+          currentContainerType = key;
+          if (key && currentContainerCount === 0) currentContainerCount = 1;
+          if (!key) { currentContainerStatus = null; currentContainerCount = 0; }
+          const cntEl = document.getElementById('container-count-input');
+          if (cntEl) cntEl.value = currentContainerCount;
+          updateContainerDisplay();
+          renderContainerTypeButtons();
+          renderContainerStatusButtons();
+        };
+        c.appendChild(b);
+      };
+      makeBtn('None', null);
+      makeBtn(containerTypeLabel('bilog'), 'bilog');
+      makeBtn(containerTypeLabel('faucet'), 'faucet');
+    }
+    function renderContainerStatusButtons() {
+      const c = document.getElementById('container-status-buttons'); if (!c) return;
+      c.innerHTML = '';
+      const makeBtn = (label, key) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = currentContainerStatus === key
+          ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
+          : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
+        b.textContent = label;
+        b.disabled = !currentContainerType;
+        if (b.disabled) b.className += ' opacity-50 cursor-not-allowed';
+        b.onclick = () => {
+          if (!currentContainerType) return;
+          currentContainerStatus = key;
+          updateContainerDisplay();
+          renderContainerStatusButtons();
+        };
+        c.appendChild(b);
+      };
+      makeBtn('Given', 'given');
+      makeBtn('To be given', 'to_be_given');
+    }
+    function applyContainerCount(v) {
+      currentContainerCount = Math.max(0, parseInt(v, 10) || 0);
+      updateContainerDisplay();
+    }
+    function toggleDeliveryOptions() { togglePanel('delivery-options'); renderRiderButtons(); }
+    function toggleContainerOptions() { togglePanel('container-options'); renderContainerTypeButtons(); renderContainerStatusButtons(); }
+
     function toggleNameOptions() {
       const opened = togglePanel('name-options');
       if (opened) { renderSavedCustomerChips(); document.getElementById('name-search-input').value = currentName === 'no name' ? '' : currentName; }
@@ -1026,7 +1308,10 @@
         if (d.toDateString() === today) { count++; income += toNum(t.total, 0); }
       });
       const lastEnd = toNum(appSettings.lastEndDayAt, 0);
-      const closedText = lastEnd > 0 ? ` · Last closed: ${formatDate(lastEnd)}` : ' · Not yet closed today';
+      let closedText;
+      if (lastEnd === 0) closedText = ' · ⚠️ End Day not run yet';
+      else if (localDateStr(lastEnd) !== localDateStr()) closedText = ` · ⚠️ Last closed ${formatDate(lastEnd)}`;
+      else closedText = ' · ✅ Closed today';
       document.getElementById('today-strip').textContent = `Today: ${count} order${count === 1 ? '' : 's'} · ${money(income)}${closedText}`;
     }
     function renderCheckoutGoalBar() {
@@ -1039,38 +1324,87 @@
       document.getElementById('checkout-goal-fill').style.width = pct + '%';
       document.getElementById('checkout-goal-text').textContent = `${money(s.income)} / ${money(goal)} (${pct}%)`;
     }
-    function refreshCheckoutExtras() { renderTodayStrip(); renderCheckoutGoalBar(); updateChange(); renderArchiveInfo(); updateEndDayBadge(); }
+    function refreshCheckoutExtras() { renderTodayStrip(); renderCheckoutGoalBar(); updateChange(); renderArchiveInfo(); updateEndDayBadge(); updateEndDayBanner(); }
+
+    /* END DAY BANNER — reminder that End Day hasn't been run today */
+    function updateEndDayBanner() {
+      const banner = document.getElementById('end-day-banner');
+      const textEl = document.getElementById('end-day-banner-text');
+      if (!banner || !textEl) return;
+
+      // Reset dismissal across day change
+      if (endDayBannerDismissedOn && endDayBannerDismissedOn !== localDateStr()) {
+        endDayBannerDismissedOn = null;
+      }
+
+      // Hidden if dismissed today
+      if (endDayBannerDismissedOn) {
+        banner.classList.add('hidden'); banner.classList.remove('flex');
+        return;
+      }
+
+      // Hidden if no orders on the board
+      if (transactions.length === 0) {
+        banner.classList.add('hidden'); banner.classList.remove('flex');
+        return;
+      }
+
+      const lastEnd = toNum(appSettings.lastEndDayAt, 0);
+      if (lastEnd > 0 && localDateStr(lastEnd) === localDateStr()) {
+        // Already closed out today
+        banner.classList.add('hidden'); banner.classList.remove('flex');
+        return;
+      }
+
+      let msg;
+      if (lastEnd === 0) {
+        msg = 'End Day has never been run. Close out today so the accounting file exists.';
+      } else {
+        const daysDiff = Math.floor(
+          (new Date(localDateStr()).getTime() - new Date(localDateStr(lastEnd)).getTime()) / 86400000
+        );
+        if (daysDiff === 1) msg = 'End Day was last run yesterday. Close out today.';
+        else if (daysDiff > 1) msg = `End Day was last run ${daysDiff} days ago. Close out to avoid gaps in your records.`;
+        else msg = 'End Day not run yet today.';
+      }
+      textEl.textContent = '⚠️ ' + msg;
+      banner.classList.remove('hidden'); banner.classList.add('flex');
+    }
+    function dismissEndDayBanner() {
+      endDayBannerDismissedOn = localDateStr();
+      updateEndDayBanner();
+    }
 
     function addTransaction() {
       const total = isSpecialOverride ? specialFixedTotal : currentPrice * currentQty;
       if (!Number.isFinite(total) || total <= 0) { toast('Set a price greater than 0.'); return; }
       if (!Number.isFinite(currentQty) || currentQty < 1) { toast('Quantity must be at least 1.'); return; }
-
       const now = Date.now();
       const tx = {
-        id: newId(),
-        date: new Date(now).toISOString(),
-        updatedAt: now,
+        id: newId(), date: new Date(now).toISOString(), updatedAt: now,
         customer: currentName || 'no name',
         price: isSpecialOverride ? total / currentQty : currentPrice,
-        qty: currentQty,
-        total: total,
-        isSpecial: !!isSpecialOverride,
+        qty: currentQty, total: total, isSpecial: !!isSpecialOverride,
+        special_name: isSpecialOverride ? currentSpecialName : null,
         status: 'not_started',
         statusHistory: [{ status: 'not_started', at: new Date(now).toISOString() }],
-        custom: {}
+        custom: {},
+        rider: currentRider,
+        container_type: currentContainerType,
+        container_status: currentContainerStatus,
+        container_count: currentContainerCount
       };
-
       transactions.unshift(tx);
       saveTransactions();
       rememberCustomer(tx.customer);
-
-      isSpecialOverride = false; priceTouched = false;
+      isSpecialOverride = false; priceTouched = false; currentSpecialName = '';
       currentPrice = appSettings.refUnitPrice; currentQty = 1;
       setDisplayedPrice(currentPrice); setDisplayedQty(1); hideActiveMode();
       const cashEl = document.getElementById('cash-input'); if (cashEl) cashEl.value = '';
+      currentRider = null; currentContainerType = null; currentContainerStatus = null; currentContainerCount = 0;
+      updateDeliveryDisplay(); updateContainerDisplay();
+      const cntEl = document.getElementById('container-count-input'); if (cntEl) cntEl.value = 0;
       updateTotalPreview();
-
       refreshViews(); resetCustomerField(); refreshCheckoutExtras();
       toast(`Logged: ${tx.qty} pc${tx.qty > 1 ? 's' : ''} · ${money(tx.total)} · ${tx.customer}`);
     }
@@ -1093,7 +1427,7 @@
       let list = boardTransactions();
       if (!boardShowVoided) list = list.filter(t => !isVoided(t));
       if (boardFilter !== 'all') list = list.filter(t => statusOf(t) === boardFilter);
-      if (!boardShowDelivered) list = list.filter(t => statusOf(t) !== 'delivered');
+      if (!boardShowPaid) list = list.filter(t => statusOf(t) !== 'paid');
       if (boardSearch.trim()) {
         const q = boardSearch.trim().toLowerCase();
         list = list.filter(t => (t.customer || '').toLowerCase().includes(q));
@@ -1101,16 +1435,16 @@
       return list;
     }
     function boardStats(list) {
-      let income = 0, delivered = 0, cancelled = 0, pending = 0, voided = 0;
+      let income = 0, paid = 0, cancelled = 0, pending = 0, voided = 0;
       list.forEach(t => {
         if (isVoided(t)) { voided += 1; return; }
         const st = statusOf(t);
         if (st === 'cancelled') { cancelled += 1; return; }
         income += toNum(t.total, 0);
-        if (st === 'delivered') delivered += 1;
+        if (st === 'paid') paid += 1;
         else pending += 1;
       });
-      return { total: list.length, income, delivered, cancelled, pending, voided };
+      return { total: list.length, income, paid, cancelled, pending, voided };
     }
     function referenceUnitPrice() { return Math.max(0, toNum(appSettings.refUnitPrice, 20)); }
     function renderBoardStats() {
@@ -1152,10 +1486,10 @@
           </div>
           ${goalBody}
         </div>
-        <div class="bg-blue-50 rounded-2xl border border-blue-100 p-2.5">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Delivered</span>
-          <span class="block text-lg font-black text-blue-700">${s.delivered}</span>
-          <span class="block text-[9px] font-semibold text-blue-600/70">${s.pending} in progress</span>
+        <div class="bg-green-50 rounded-2xl border border-green-100 p-2.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-green-700 block">Paid</span>
+          <span class="block text-lg font-black text-green-800">${s.paid}</span>
+          <span class="block text-[9px] font-semibold text-green-700/70">${s.pending} in progress</span>
         </div>
         <div class="bg-red-50 rounded-2xl border border-red-100 p-2.5">
           <span class="text-[10px] font-bold uppercase tracking-wider text-red-600 block">Cancelled</span>
@@ -1190,18 +1524,18 @@
       const chips = [
         { key: 'all', label: 'All' }, { key: 'not_started', label: 'Not Started' },
         { key: 'preparing', label: 'Preparing' }, { key: 'otw', label: 'On the Way' },
-        { key: 'cancelled', label: 'Cancelled' }
+        { key: 'delivered', label: 'Delivered' }, { key: 'cancelled', label: 'Cancelled' }
       ];
       chips.forEach(({ key, label }) => {
         const b = document.createElement('button'); b.type = 'button';
         b.className = boardFilter === key ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
         b.textContent = label; b.addEventListener('click', () => setBoardFilter(key)); c.appendChild(b);
       });
-      const deliveredCount = boardTransactions().filter(t => !isVoided(t) && statusOf(t) === 'delivered').length;
+      const paidCount = boardTransactions().filter(t => !isVoided(t) && statusOf(t) === 'paid').length;
       const tD = document.createElement('button'); tD.type = 'button';
-      tD.className = boardShowDelivered ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-600 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
-      tD.textContent = boardShowDelivered ? `Hide delivered (${deliveredCount})` : `Show delivered (${deliveredCount})`;
-      tD.addEventListener('click', toggleShowDelivered); c.appendChild(tD);
+      tD.className = boardShowPaid ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-green-600 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
+      tD.textContent = boardShowPaid ? `Hide paid (${paidCount})` : `Show paid (${paidCount})`;
+      tD.addEventListener('click', toggleShowPaid); c.appendChild(tD);
       const voidedCount = boardTransactions().filter(isVoided).length;
       const tV = document.createElement('button'); tV.type = 'button';
       tV.className = boardShowVoided ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-red-600 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
@@ -1210,16 +1544,14 @@
     }
     function setBoardFilter(f) { boardFilter = f; renderBoardFilters(); renderBoard(); updateSelectAllState(); }
     function setBoardSearch(v) { boardSearch = v; renderBoard(); updateSelectAllState(); }
-    function toggleShowDelivered() { boardShowDelivered = !boardShowDelivered; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
+    function toggleShowPaid() { boardShowPaid = !boardShowPaid; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
     function toggleShowVoided() { boardShowVoided = !boardShowVoided; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
 
-    /* SLIM renderBoard - 6 base columns, unit price + special merged into Total subtitle */
     function renderBoard() {
       const table = document.getElementById('board-table'); if (!table) return;
       const list = filteredBoardTransactions();
       const cols = appSettings.customColumns || [];
       const colCount = 6 + cols.length;
-
       const head =
         '<thead class="bg-slate-100 text-slate-600 sticky top-0 z-10"><tr>'
         + '<th class="px-0.5 py-1.5 text-center border-b border-slate-200 w-6"><input type="checkbox" id="board-select-all" onchange="toggleSelectAll(this.checked)" class="w-3 h-3" aria-label="Select all"></th>'
@@ -1230,7 +1562,6 @@
         + '<th class="px-1 py-1.5 text-left border-b border-slate-200 whitespace-nowrap min-w-[6rem]">Status</th>'
         + cols.map(col => `<th class="px-1 py-1.5 text-left border-b border-slate-200 whitespace-nowrap min-w-[5rem]"><div class="flex items-center gap-0.5"><span class="truncate max-w-[6rem]">${esc(col.name)}</span><button type="button" onclick="removeCustomColumn('${col.id}')" class="no-print w-4 h-4 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-[9px] font-bold" aria-label="Remove">✕</button></div></th>`).join('')
         + '</tr></thead>';
-
       let body;
       if (list.length === 0) {
         body = `<tbody><tr><td colspan="${colCount}" class="px-3 py-6 text-center text-xs italic text-slate-400">No matching orders.</td></tr></tbody>`;
@@ -1241,23 +1572,22 @@
           const qty = toPosInt(t.qty, 1);
           const isSel = selectedTx.has(String(t.id));
           const voided = isVoided(t);
-
           const editedBadge = (t.edits && t.edits.length > 0)
             ? `<span class="text-[9px] text-amber-600" title="${esc(t.edits.map(e => e.changes).join(' | '))}">✎</span>` : '';
           const voidedBadge = voided
             ? `<span class="px-1 py-0 rounded bg-red-100 text-red-700 text-[8px] font-black uppercase">V</span>` : '';
-
           const statusCell = voided
             ? `<div class="flex items-center gap-0.5"><span class="flex-1 text-[10px] font-bold text-red-600 truncate">${esc(formatDate(t.voided_at))}</span><button type="button" onclick="restoreTransaction('${t.id}')" class="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded">↺</button></div>`
             : `<select onchange="setOrderStatus('${t.id}', this.value)" class="w-full text-[10px] font-bold rounded-md border px-0.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 ${sd.cls}">
                 ${ORDER_STATUSES.map(s => `<option value="${s.key}"${s.key === st ? ' selected' : ''}>${s.label}</option>`).join('')}
               </select>`;
-
           const customCells = cols.map(col => {
             const val = (t.custom && t.custom[col.id]) || '';
             return `<td class="px-0.5 py-0.5 border-b border-slate-100"><input type="text" value="${esc(val)}" onchange="updateTxCustom('${t.id}', '${col.id}', this.value)" ${voided ? 'disabled' : ''} class="w-full min-w-[5rem] bg-transparent border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded px-1 py-0.5 text-[10px] text-slate-800 focus:outline-none disabled:opacity-50"></td>`;
           }).join('');
-
+          const riderBadge = t.rider ? `<span class="text-[9px] text-blue-600 font-bold">🚚 ${esc(riderLabel(t.rider))}</span>` : '';
+          const containerBadge = t.container_type ? `<span class="text-[9px] text-slate-600">📦 ${t.container_count > 0 ? t.container_count + '× ' : ''}${esc(containerTypeLabel(t.container_type))}${t.container_status ? ' (' + containerStatusLabel(t.container_status).toLowerCase() + ')' : ''}</span>` : '';
+          const subtitle = (riderBadge || containerBadge) ? `<div class="flex items-center gap-1 mt-0.5 flex-wrap">${riderBadge}${containerBadge}</div>` : '';
           return `<tr class="hover:bg-emerald-50/40 ${voided ? 'opacity-60 bg-red-50/30' : (st === 'cancelled' ? 'opacity-60' : '')} ${isSel ? 'bg-emerald-50' : ''}">
             <td class="px-0.5 py-1 border-b border-slate-100 text-center"><input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleSelect('${t.id}', this.checked)" class="w-3 h-3"></td>
             <td class="px-0.5 py-1 border-b border-slate-100 text-center text-slate-400 font-bold text-[9px]">${i + 1}</td>
@@ -1266,11 +1596,12 @@
                 <span class="truncate max-w-[8rem]" title="${esc(t.customer || 'no name')}">${esc(t.customer || 'no name')}</span>
                 ${editedBadge}${voidedBadge}
               </div>
+              ${subtitle}
             </td>
             <td class="px-1 py-1 border-b border-slate-100 text-right font-semibold text-slate-700 text-[11px] whitespace-nowrap">${qty}</td>
             <td class="px-1 py-1 border-b border-slate-100 text-right">
               <div class="font-black text-emerald-700 text-[11px] whitespace-nowrap">${money(toNum(t.total, 0))}</div>
-              <div class="text-[9px] text-slate-400 whitespace-nowrap">${t.isSpecial ? '<span class="text-purple-600 font-bold">★ auto</span>' : `${moneyShort(toNum(t.price, 0))} ea`}</div>
+              <div class="text-[9px] text-slate-400 whitespace-nowrap">${t.isSpecial ? `<span class="text-purple-600 font-bold">★ ${esc(t.special_name || 'special')}</span>` : `${moneyShort(toNum(t.price, 0))} ea`}</div>
             </td>
             <td class="px-1 py-1 border-b border-slate-100">${statusCell}</td>
             ${customCells}
@@ -1307,24 +1638,53 @@
       tx.statusHistory.push({ status: next, at: new Date().toISOString() });
       touchTx(tx);
       saveTransactions();
-      refreshViews();
+      refreshViews(); refreshCheckoutExtras();
     }
     function setOrderStatus(id, newStatus) {
       const tx = transactions.find(t => String(t.id) === String(id));
       if (!tx || isVoided(tx)) return;
       const next = ORDER_STATUSES.some(s => s.key === newStatus) ? newStatus : 'not_started';
       if (statusOf(tx) === next) return;
-      if (next === 'delivered') {
+
+      if (next === 'paid') { showPaidConfirmPopup(tx); return; }
+      if (next === 'cancelled') {
         openConfirmModal({
-          title: 'Mark as Delivered?',
-          desc: 'This order will be added to the Sales Table. Make sure the payment has already been received before confirming.',
-          okLabel: 'Yes, delivered',
+          title: 'Mark as Cancelled?',
+          desc: 'This order will be marked cancelled.\n\nIt stays in exports for audit but is excluded from revenue.',
+          okLabel: 'Yes, cancel',
           onConfirm: () => applyStatus(tx, next),
           onCancel: () => renderBoard()
         });
         return;
       }
       applyStatus(tx, next);
+    }
+    function showPaidConfirmPopup(tx) {
+      const custName = tx.customer || 'no name';
+      const total = money(tx.total);
+      const delAt = deliveredAt(tx);
+      const rider = tx.rider ? riderLabel(tx.rider) : '';
+      const lines = [];
+      lines.push(`Customer: ${custName}`);
+      lines.push(`Total: ${total}`);
+      if (delAt) lines.push(`Delivered: ${formatDate(delAt, true)}`);
+      if (rider) lines.push(`Delivered by: ${rider}`);
+      lines.push(`Paid: ${formatDate(new Date().toISOString(), true)}`);
+      lines.push('');
+      if (tx.isSpecial) {
+        lines.push(`Special: ${tx.special_name || 'special'}`);
+      } else {
+        lines.push(`${toPosInt(tx.qty, 1)} × ${money(toNum(tx.price, 0))} = ${total}`);
+      }
+      lines.push('');
+      lines.push('This order will be added to the Sales Table. Make sure payment has been received.');
+      openConfirmModal({
+        title: 'Confirm Payment Received?',
+        desc: lines.join('\n'),
+        okLabel: 'Yes, mark paid',
+        onConfirm: () => applyStatus(tx, 'paid'),
+        onCancel: () => renderBoard()
+      });
     }
     function bulkSetStatus(nextStatus) {
       if (selectedTx.size === 0) return;
@@ -1343,11 +1703,23 @@
         refreshViews();
         toast(`Updated ${targets.length} order${targets.length === 1 ? '' : 's'}.`);
       };
-      if (nextStatus === 'delivered') {
+      if (nextStatus === 'paid') {
+        const total = targets.reduce((s, t) => s + toNum(t.total, 0), 0);
         openConfirmModal({
-          title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Delivered?`,
-          desc: 'These will be added to the Sales Table. Make sure payments have been received.',
-          okLabel: 'Yes, deliver all',
+          title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Paid?`,
+          desc: `Total: ${money(total)}\n\n` +
+                `These ${targets.length} orders will be added to the Sales Table.\n\n` +
+                `Make sure payments have been received for all of them.`,
+          okLabel: 'Yes, mark all paid',
+          onConfirm: apply
+        });
+        return;
+      }
+      if (nextStatus === 'cancelled') {
+        openConfirmModal({
+          title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Cancelled?`,
+          desc: 'They will be excluded from revenue.',
+          okLabel: 'Yes, cancel all',
           onConfirm: apply
         });
         return;
@@ -1384,23 +1756,24 @@
     function removeCustomColumn(colId) {
       const col = (appSettings.customColumns || []).find(c => c.id === colId);
       if (!col) return;
-      openConfirmModal({
-        title: 'Remove column?',
-        desc: `"${col.name}" and all of its values will be deleted from every order.`,
-        okLabel: 'Remove',
+      confirmDelete({
+        title: 'Delete column?',
+        item: `"${col.name}"`,
+        instruction: 'The column and all its values will be removed from every order. This cannot be undone.',
+        okLabel: 'Delete column',
         onConfirm: () => {
           appSettings.customColumns = appSettings.customColumns.filter(c => c.id !== colId);
           transactions.forEach(t => { if (t.custom && Object.prototype.hasOwnProperty.call(t.custom, colId)) { delete t.custom[colId]; touchTx(t); } });
           saveJSON(KEY_SETTINGS, appSettings);
           saveTransactions();
           renderBoard();
-          toast(`Column "${col.name}" removed.`);
+          toast(`Column "${col.name}" deleted.`);
         }
       });
     }
 
     function isTableViewOpen() { const el = document.getElementById('table-view'); return !!el && el.classList.contains('open'); }
-    function salesTransactions() { return transactions.filter(t => !isVoided(t) && statusOf(t) === 'delivered'); }
+    function salesTransactions() { return transactions.filter(t => !isVoided(t) && statusOf(t) === 'paid'); }
     function rowChangedAt(t) { return toNum(t.updatedAt, 0) || toNum(new Date(t.date).getTime(), 0); }
     function isRowLocked(t) { return toNum(appSettings.lastBackupAt, 0) < rowChangedAt(t); }
     function renderTable() {
@@ -1411,7 +1784,7 @@
       const list = salesTransactions();
       const head = '<thead class="bg-slate-100 text-slate-600 sticky top-0 z-10"><tr>' + columnOrder.map(headerCellHTML).join('') + '</tr></thead>';
       let body;
-      if (list.length === 0) body = `<tbody><tr><td colspan="${columnOrder.length}" class="px-3 py-6 text-center text-xs italic text-slate-400">No delivered orders yet — mark an order as Delivered on the Order Board.</td></tr></tbody>`;
+      if (list.length === 0) body = `<tbody><tr><td colspan="${columnOrder.length}" class="px-3 py-6 text-center text-xs italic text-slate-400">No paid orders yet — mark an order as Paid on the Order Board.</td></tr></tbody>`;
       else body = '<tbody>' + list.map((t, i) => rowHTML(t, i)).join('') + '</tbody>';
       table.innerHTML = head + body;
       const le = document.getElementById('table-last-export');
@@ -1456,6 +1829,16 @@
         case 'date': return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${esc(formatDate(t.date))}</td>`;
         case 'time': return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${esc(formatTime(t.date))}</td>`;
         case 'deliveredAt': { const d = deliveredAt(t); return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${d ? esc(formatDate(d, true)) : '<span class="text-slate-300">—</span>'}</td>`; }
+        case 'paidAt': { const d = paidAt(t); return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${d ? esc(formatDate(d, true)) : '<span class="text-slate-300">—</span>'}</td>`; }
+        case 'rider': return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${t.rider ? esc(riderLabel(t.rider)) : '<span class="text-slate-300">—</span>'}</td>`;
+        case 'container': {
+          if (!t.container_type) return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap"><span class="text-slate-300">—</span></td>`;
+          const parts = [];
+          if (t.container_count > 0) parts.push(t.container_count + '×');
+          parts.push(containerTypeLabel(t.container_type));
+          if (t.container_status) parts.push('(' + containerStatusLabel(t.container_status) + ')');
+          return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap">${esc(parts.join(' '))}</td>`;
+        }
         case 'minutesToDeliver': { const m = minutesToDeliver(t); return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap text-right">${m == null ? '<span class="text-slate-300">—</span>' : m + ' min'}</td>`; }
         case 'actions': {
           const locked = isRowLocked(t);
@@ -1479,16 +1862,13 @@
       }
       if (changed) {
         touchTx(tx);
-        if (statusOf(tx) === 'delivered') {
+        if (statusOf(tx) === 'paid') {
           const diffs = [];
           if (before.customer !== tx.customer) diffs.push(`name: "${before.customer}" → "${tx.customer}"`);
           if (before.price !== tx.price) diffs.push(`price: ${money(before.price)} → ${money(tx.price)}`);
           if (before.qty !== tx.qty) diffs.push(`qty: ${before.qty} → ${tx.qty}`);
           if (before.total !== tx.total) diffs.push(`total: ${money(before.total)} → ${money(tx.total)}`);
-          if (diffs.length > 0) {
-            tx.edits = tx.edits || [];
-            tx.edits.push({ at: new Date().toISOString(), changes: diffs.join('; ') });
-          }
+          if (diffs.length > 0) { tx.edits = tx.edits || []; tx.edits.push({ at: new Date().toISOString(), changes: diffs.join('; ') }); }
         }
       }
       saveTransactions();
@@ -1498,8 +1878,7 @@
       const special = !!tx.isSpecial;
       const fixedTotal = toNum(tx.total, 0);
       if (field === 'price') {
-        const price = Math.max(0, value);
-        tx.price = price;
+        const price = Math.max(0, value); tx.price = price;
         if (special && price > 0) { const qty = Math.max(1, Math.round(fixedTotal / price)); tx.qty = qty; tx.price = round2(fixedTotal / qty); }
         else if (!special) { tx.total = round2(price * tx.qty); }
       } else if (field === 'qty') {
@@ -1518,26 +1897,34 @@
       if (isRowLocked(tx)) {
         openConfirmModal({
           title: 'Backup required',
-          desc: 'This order was created or edited after the last export. Export first, then void it.',
+          desc: 'This order was created or edited after the last export.\n\nExport first, then void it.',
           okLabel: 'Export now',
           onConfirm: () => { if (exportToExcel()) deleteTransaction(id); }
         });
         return;
       }
-      const prevVoided = tx.voided_at;
-      const prevUpdatedAt = tx.updatedAt;
-      tx.voided_at = new Date().toISOString();
-      touchTx(tx);
-      saveTransactions();
-      refreshViews(); refreshCheckoutExtras();
-      toast(`Voided "${tx.customer}" · ${money(tx.total)}`, {
-        label: 'Undo',
-        onClick: () => {
-          tx.voided_at = prevVoided;
-          tx.updatedAt = prevUpdatedAt;
+      confirmDelete({
+        title: 'Void this order?',
+        item: `"${tx.customer}" — ${money(tx.total)}`,
+        instruction: 'The order will be marked voided. It stays in exports for audit but is excluded from revenue.',
+        okLabel: 'Void order',
+        onConfirm: () => {
+          const prevVoided = tx.voided_at;
+          const prevUpdatedAt = tx.updatedAt;
+          tx.voided_at = new Date().toISOString();
+          touchTx(tx);
           saveTransactions();
           refreshViews(); refreshCheckoutExtras();
-          toast('Restored.');
+          toast(`Voided "${tx.customer}" · ${money(tx.total)}`, {
+            label: 'Undo',
+            onClick: () => {
+              tx.voided_at = prevVoided;
+              tx.updatedAt = prevUpdatedAt;
+              saveTransactions();
+              refreshViews(); refreshCheckoutExtras();
+              toast('Restored.');
+            }
+          });
         }
       });
     }
@@ -1597,6 +1984,11 @@
       renderCustomerEditorRows([...savedCustomers]);
       document.getElementById('cfg-ref-price').value = appSettings.refUnitPrice;
       const cashEl = document.getElementById('cfg-show-cash'); if (cashEl) cashEl.checked = !!appSettings.showCash;
+      const rA = document.getElementById('cfg-rider-a'); if (rA && document.activeElement !== rA) rA.value = (appSettings.riders.rider_a || {}).label || 'Rider A';
+      const rB = document.getElementById('cfg-rider-b'); if (rB && document.activeElement !== rB) rB.value = (appSettings.riders.rider_b || {}).label || 'Rider B';
+      const cB = document.getElementById('cfg-container-bilog'); if (cB && document.activeElement !== cB) cB.value = (appSettings.containerTypes.bilog || {}).label || 'Bilog';
+      const cF = document.getElementById('cfg-container-faucet'); if (cF && document.activeElement !== cF) cF.value = (appSettings.containerTypes.faucet || {}).label || 'Faucet';
+      updateTextScaleButtons();
     }
     function readTierEditorRows() {
       const c = document.getElementById('tier-editor'); if (!c) return [];
@@ -1612,12 +2004,34 @@
       arr.forEach((tier, i) => {
         const row = document.createElement('div');
         row.setAttribute('data-tier-row', ''); row.className = 'flex gap-1 items-center';
-        row.innerHTML = `<input type="text" data-tier-name value="${esc(tier.name)}" class="flex-1 min-w-0 p-1 bg-white border rounded text-xs"><input type="number" min="0" step="0.01" data-tier-price value="${tier.price}" class="w-20 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeTierRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold">✕</button>`;
+        row.innerHTML = `<input type="text" data-tier-name value="${esc(tier.name)}" onchange="saveFromEditors()" class="flex-1 min-w-0 p-1 bg-white border rounded text-xs"><input type="number" min="0" step="0.01" data-tier-price value="${tier.price}" onchange="saveFromEditors()" class="w-20 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeTierRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold" aria-label="Delete">✕</button>`;
         c.appendChild(row);
       });
     }
-    function addTierRow() { const a = readTierEditorRows(); a.push({ name: `Tier ${a.length + 1}`, price: 0 }); renderTierEditorRows(a); }
-    function removeTierRow(i) { const a = readTierEditorRows(); a.splice(i, 1); if (a.length === 0) a.push({ name: 'Tier 1', price: 0 }); renderTierEditorRows(a); }
+    function addTierRow() {
+      const a = readTierEditorRows(); a.push({ name: `Tier ${a.length + 1}`, price: 0 });
+      appSettings.tiers = a; saveJSON(KEY_SETTINGS, appSettings);
+      renderTierEditorRows(a); renderTierButtons();
+    }
+    function removeTierRow(i) {
+      const current = readTierEditorRows();
+      const tier = current[i] || { name: 'this tier', price: 0 };
+      confirmDelete({
+        title: 'Delete price tier?',
+        item: `"${tier.name}" — ${money(tier.price)}`,
+        instruction: 'This tier will be removed from the checkout price selector. It does not affect existing orders.',
+        okLabel: 'Delete tier',
+        onConfirm: () => {
+          const rows = readTierEditorRows();
+          rows.splice(i, 1);
+          if (rows.length === 0) rows.push({ name: 'Tier 1', price: 0 });
+          appSettings.tiers = rows;
+          saveJSON(KEY_SETTINGS, appSettings);
+          renderTierEditorRows(rows); renderTierButtons();
+          toast('Tier deleted.');
+        }
+      });
+    }
     function readQtyPresetEditorRows() {
       const c = document.getElementById('qty-preset-editor'); if (!c) return [];
       return Array.from(c.querySelectorAll('[data-qty-preset-row]')).map(row => {
@@ -1630,12 +2044,34 @@
       arr.forEach((qty, i) => {
         const row = document.createElement('div');
         row.setAttribute('data-qty-preset-row', ''); row.className = 'flex gap-1 items-center';
-        row.innerHTML = `<input type="number" min="1" step="1" data-qty-preset-value value="${qty}" class="w-20 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeQtyPresetRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold">✕</button>`;
+        row.innerHTML = `<input type="number" min="1" step="1" data-qty-preset-value value="${qty}" onchange="saveFromEditors()" class="w-20 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeQtyPresetRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold" aria-label="Delete">✕</button>`;
         c.appendChild(row);
       });
     }
-    function addQtyPresetRow() { const a = readQtyPresetEditorRows(); a.push(1); renderQtyPresetEditorRows(a); }
-    function removeQtyPresetRow(i) { const a = readQtyPresetEditorRows(); a.splice(i, 1); if (a.length === 0) a.push(1); renderQtyPresetEditorRows(a); }
+    function addQtyPresetRow() {
+      const a = readQtyPresetEditorRows(); a.push(1);
+      appSettings.qtyPresets = a; saveJSON(KEY_SETTINGS, appSettings);
+      renderQtyPresetEditorRows(a); renderQtyPresetButtons();
+    }
+    function removeQtyPresetRow(i) {
+      const current = readQtyPresetEditorRows();
+      const val = current[i] || 'this preset';
+      confirmDelete({
+        title: 'Delete quantity preset?',
+        item: `"${val} pc"`,
+        instruction: 'This quick-pick quantity button will be removed from the checkout screen.',
+        okLabel: 'Delete preset',
+        onConfirm: () => {
+          const rows = readQtyPresetEditorRows();
+          rows.splice(i, 1);
+          if (rows.length === 0) rows.push(1);
+          appSettings.qtyPresets = rows;
+          saveJSON(KEY_SETTINGS, appSettings);
+          renderQtyPresetEditorRows(rows); renderQtyPresetButtons();
+          toast('Quantity preset deleted.');
+        }
+      });
+    }
     function readCustomerEditorRows() {
       const c = document.getElementById('customer-editor'); if (!c) return [];
       return Array.from(c.querySelectorAll('[data-customer-row]')).map(row => {
@@ -1649,49 +2085,153 @@
       arr.forEach((name, i) => {
         const row = document.createElement('div');
         row.setAttribute('data-customer-row', ''); row.className = 'flex gap-1 items-center';
-        row.innerHTML = `<input type="text" data-customer-name value="${esc(name)}" class="flex-1 min-w-0 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeCustomerRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold">✕</button>`;
+        row.innerHTML = `<input type="text" data-customer-name value="${esc(name)}" onchange="saveFromEditors()" class="flex-1 min-w-0 p-1 bg-white border rounded text-xs"><button type="button" onclick="removeCustomerRow(${i})" class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-bold" aria-label="Delete">✕</button>`;
         c.appendChild(row);
       });
     }
-    function addCustomerRow() { const a = readCustomerEditorRows(); a.push(''); renderCustomerEditorRows(a); const inputs = document.querySelectorAll('#customer-editor [data-customer-name]'); const last = inputs[inputs.length - 1]; if (last) last.focus(); }
-    function removeCustomerRow(i) { const a = readCustomerEditorRows(); a.splice(i, 1); renderCustomerEditorRows(a); }
+    function addCustomerRow() {
+      const a = readCustomerEditorRows(); a.push('');
+      renderCustomerEditorRows(a);
+      const inputs = document.querySelectorAll('#customer-editor [data-customer-name]');
+      const last = inputs[inputs.length - 1];
+      if (last) last.focus();
+    }
+    function removeCustomerRow(i) {
+      const current = readCustomerEditorRows();
+      const name = current[i] || 'this customer';
+      confirmDelete({
+        title: 'Delete customer?',
+        item: `"${name}"`,
+        instruction: 'This customer will be removed from the saved list. It does not affect existing orders.',
+        okLabel: 'Delete customer',
+        onConfirm: () => {
+          const rows = readCustomerEditorRows();
+          rows.splice(i, 1);
+          const seen = new Set();
+          const dedup = [];
+          rows.forEach(n => {
+            const k = n.toLowerCase();
+            if (seen.has(k)) return;
+            seen.add(k); dedup.push(n);
+          });
+          savedCustomers = dedup.slice(0, MAX_SAVED_CUSTOMERS);
+          saveJSON(KEY_CUSTOMERS, savedCustomers);
+          renderCustomerEditorRows(savedCustomers);
+          renderSavedCustomerChips();
+          toast('Customer deleted.');
+        }
+      });
+    }
+
+    function saveFromEditors() {
+      ['A', 'B', 'C'].forEach(k => {
+        const nameEl = document.getElementById(`cfg-sp-${k}-name`);
+        const priceEl = document.getElementById(`cfg-sp-${k}-price`);
+        const qtyEl = document.getElementById(`cfg-sp-${k}-qty`);
+        if (nameEl && priceEl && qtyEl) {
+          presetsConfig.specials[k] = {
+            name: (nameEl.value || '').trim() || `SPECIAL ${k}`,
+            total: Math.max(0, toNum(priceEl.value, 0)),
+            qty: toPosInt(qtyEl.value, 1)
+          };
+        }
+        const loNameEl = document.getElementById(`cfg-lo-${k}-name`);
+        const loPriceEl = document.getElementById(`cfg-lo-${k}-price`);
+        const loQtyEl = document.getElementById(`cfg-lo-${k}-qty`);
+        if (loNameEl && loPriceEl && loQtyEl) {
+          presetsConfig.loadouts[k] = {
+            name: (loNameEl.value || '').trim() || `LOADOUT ${k}`,
+            price: Math.max(0, toNum(loPriceEl.value, 0)),
+            qty: toPosInt(loQtyEl.value, 1)
+          };
+        }
+      });
+
+      const rA = document.getElementById('cfg-rider-a');
+      const rB = document.getElementById('cfg-rider-b');
+      if (rA) appSettings.riders.rider_a = { label: (rA.value || '').trim() || 'Rider A' };
+      if (rB) appSettings.riders.rider_b = { label: (rB.value || '').trim() || 'Rider B' };
+      const cB = document.getElementById('cfg-container-bilog');
+      const cF = document.getElementById('cfg-container-faucet');
+      if (cB) appSettings.containerTypes.bilog = { label: (cB.value || '').trim() || 'Bilog' };
+      if (cF) appSettings.containerTypes.faucet = { label: (cF.value || '').trim() || 'Faucet' };
+
+      const tiers = readTierEditorRows();
+      if (tiers.length > 0) appSettings.tiers = tiers;
+
+      const qtyPresets = readQtyPresetEditorRows();
+      if (qtyPresets.length > 0) appSettings.qtyPresets = qtyPresets;
+
+      const rows = readCustomerEditorRows();
+      const seen = new Set();
+      const newCustomers = [];
+      rows.forEach(n => {
+        const k = n.toLowerCase();
+        if (seen.has(k)) return;
+        seen.add(k); newCustomers.push(n);
+      });
+      if (newCustomers.length > 0) savedCustomers = newCustomers.slice(0, MAX_SAVED_CUSTOMERS);
+
+      const refEl = document.getElementById('cfg-ref-price');
+      if (refEl) {
+        const refVal = parseFloat(refEl.value);
+        if (Number.isFinite(refVal) && refVal >= 0) appSettings.refUnitPrice = round2(refVal);
+      }
+      const cashEl = document.getElementById('cfg-show-cash');
+      if (cashEl) appSettings.showCash = !!cashEl.checked;
+      appSettings.currency = '₱';
+
+      saveJSON(KEY_PRESETS, presetsConfig);
+      saveJSON(KEY_SETTINGS, appSettings);
+      saveJSON(KEY_CUSTOMERS, savedCustomers);
+
+      if (!priceTouched && !isSpecialOverride) {
+        currentPrice = appSettings.refUnitPrice;
+        setDisplayedPrice(currentPrice);
+      }
+      renderTierButtons(); renderQtyPresetButtons(); renderSavedCustomerChips();
+      syncPresetUI(); applyCashVisibility();
+      updateDeliveryDisplay(); updateContainerDisplay();
+      updateTotalPreview();
+      refreshViews(); refreshCheckoutExtras();
+    }
+
     function toggleSidebar(open) {
       const s = document.getElementById('sidebar');
       s.classList.toggle('hidden', !open);
-      if (open) { renderAllSettingsEditors(); syncPresetUI(); renderArchiveInfo(); updateEndDayBadge(); } else closePanels();
+      if (open) {
+        renderAllSettingsEditors();
+        syncPresetUI();
+        renderArchiveInfo();
+        updateEndDayBadge();
+      } else {
+        closePanels();
+      }
     }
-    function saveAllSettings() {
-      ['A', 'B', 'C'].forEach(k => {
-        presetsConfig.specials[k] = {
-          name: (document.getElementById(`cfg-sp-${k}-name`).value || '').trim() || `SPECIAL ${k}`,
-          total: Math.max(0, toNum(document.getElementById(`cfg-sp-${k}-price`).value, 0)),
-          qty: toPosInt(document.getElementById(`cfg-sp-${k}-qty`).value, 1)
-        };
-        presetsConfig.loadouts[k] = {
-          name: (document.getElementById(`cfg-lo-${k}-name`).value || '').trim() || `LOADOUT ${k}`,
-          price: Math.max(0, toNum(document.getElementById(`cfg-lo-${k}-price`).value, 0)),
-          qty: toPosInt(document.getElementById(`cfg-lo-${k}-qty`).value, 1)
-        };
+
+    function applyTextScale() {
+      const root = document.documentElement;
+      const mode = appSettings.textScale || 'auto';
+      if (mode === 'small') root.style.fontSize = '14px';
+      else if (mode === 'medium') root.style.fontSize = '16px';
+      else if (mode === 'large') root.style.fontSize = '18px';
+      else root.style.fontSize = '';
+    }
+    function updateTextScaleButtons() {
+      const mode = appSettings.textScale || 'auto';
+      document.querySelectorAll('[data-scale]').forEach(btn => {
+        const active = btn.dataset.scale === mode;
+        btn.className = active
+          ? 'py-2 rounded-xl text-[11px] font-bold bg-slate-800 text-white transition'
+          : 'py-2 rounded-xl text-[11px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition';
       });
-      const tiers = readTierEditorRows(); if (tiers.length === 0) { toast('Add at least one price tier.'); return; }
-      appSettings.tiers = tiers;
-      const qtyPresets = readQtyPresetEditorRows(); if (qtyPresets.length === 0) { toast('Add at least one quantity preset.'); return; }
-      appSettings.qtyPresets = qtyPresets;
-      const refVal = parseFloat(document.getElementById('cfg-ref-price').value);
-      appSettings.refUnitPrice = (Number.isFinite(refVal) && refVal >= 0) ? round2(refVal) : 20;
-      appSettings.currency = '₱';
-      const cashToggle = document.getElementById('cfg-show-cash');
-      appSettings.showCash = !!(cashToggle && cashToggle.checked);
-      const rows = readCustomerEditorRows();
-      const seen = new Set(); savedCustomers = [];
-      rows.forEach(n => { const k = n.toLowerCase(); if (seen.has(k)) return; seen.add(k); savedCustomers.push(n); });
-      savedCustomers = savedCustomers.slice(0, MAX_SAVED_CUSTOMERS);
-      saveJSON(KEY_PRESETS, presetsConfig); saveJSON(KEY_SETTINGS, appSettings); saveJSON(KEY_CUSTOMERS, savedCustomers);
-      if (!priceTouched && !isSpecialOverride) { currentPrice = appSettings.refUnitPrice; setDisplayedPrice(currentPrice); }
-      renderAllSettingsEditors(); renderTierButtons(); renderQtyPresetButtons(); renderSavedCustomerChips(); syncPresetUI(); applyCashVisibility();
-      if (isSpecialOverride) document.getElementById('display-price').innerText = 'Fixed ' + money(specialFixedTotal);
-      updateTotalPreview(); refreshViews(); refreshCheckoutExtras();
-      toast('Settings saved.');
+    }
+    function setTextScale(mode) {
+      const valid = ['auto', 'small', 'medium', 'large'];
+      appSettings.textScale = valid.includes(mode) ? mode : 'auto';
+      saveJSON(KEY_SETTINGS, appSettings);
+      applyTextScale();
+      updateTextScaleButtons();
     }
 
     function updateEndDayBadge() {
@@ -1716,20 +2256,18 @@
       const terminal = [];
       const open = [];
       transactions.forEach(t => {
-        if (isVoided(t) || statusOf(t) === 'delivered' || statusOf(t) === 'cancelled') terminal.push(t);
+        if (isVoided(t) || statusOf(t) === 'paid' || statusOf(t) === 'cancelled') terminal.push(t);
         else open.push(t);
       });
-      const deliveredCount = terminal.filter(t => statusOf(t) === 'delivered' && !isVoided(t)).length;
+      const paidCount = terminal.filter(t => statusOf(t) === 'paid' && !isVoided(t)).length;
       const cancelledCount = terminal.filter(t => statusOf(t) === 'cancelled' && !isVoided(t)).length;
       const voidedCount = terminal.filter(isVoided).length;
-      const revenue = terminal.filter(t => statusOf(t) === 'delivered' && !isVoided(t)).reduce((s, t) => s + toNum(t.total, 0), 0);
+      const revenue = terminal.filter(t => statusOf(t) === 'paid' && !isVoided(t)).reduce((s, t) => s + toNum(t.total, 0), 0);
       const cutoff = toNum(appSettings.lastBackupAt, 0);
       const unexported = transactions.filter(t => rowChangedAt(t) > cutoff).length;
-
-      let desc = `Delivered: ${deliveredCount}\nCancelled: ${cancelledCount}\nVoided: ${voidedCount}\nOpen (not delivered): ${open.length}\nRevenue: ${money(revenue)}\n\n`;
+      let desc = `Paid: ${paidCount}\nCancelled: ${cancelledCount}\nVoided: ${voidedCount}\nOpen (not paid): ${open.length}\nRevenue: ${money(revenue)}\n\n`;
       if (open.length > 0) desc += `⚠️ ${open.length} order${open.length > 1 ? 's' : ''} still open. ${open.length === 1 ? 'It' : 'They'} will stay on the board for tomorrow.\n\n`;
       if (unexported > 0) desc += `ℹ️ ${unexported} change${unexported > 1 ? 's' : ''} since the last export. A final export will be created now.`;
-
       openConfirmModal({
         title: `End Day · ${localDateDisplay()}`,
         desc,
@@ -1738,12 +2276,12 @@
       });
     }
     function confirmEndDayStep2(terminal, open) {
-      const delivered = terminal.filter(t => statusOf(t) === 'delivered' && !isVoided(t));
-      const revenue = delivered.reduce((s, t) => s + toNum(t.total, 0), 0);
+      const paid = terminal.filter(t => statusOf(t) === 'paid' && !isVoided(t));
+      const revenue = paid.reduce((s, t) => s + toNum(t.total, 0), 0);
       openConfirmModal({
         title: '⚠️ Final confirmation',
         desc: `You are about to close out ${localDateDisplay()}.\n\n` +
-              `${delivered.length} delivered order${delivered.length === 1 ? '' : 's'} · ${money(revenue)} revenue\n` +
+              `${paid.length} paid order${paid.length === 1 ? '' : 's'} · ${money(revenue)} revenue\n` +
               `${terminal.length} total finished order${terminal.length === 1 ? '' : 's'} will be exported and archived.\n` +
               `${open.length} open order${open.length === 1 ? '' : 's'} will remain on the board.\n\n` +
               `This cannot be undone. Make sure the downloaded export file is saved somewhere safe.`,
@@ -1763,30 +2301,24 @@
       saveJSON(KEY_ARCHIVE, archiveList);
       transactions = open.slice();
       saveTransactions();
-      boardShowVoided = false;
-      boardShowDelivered = false;
-      selectedTx.clear();
+      boardShowVoided = false; boardShowPaid = false; selectedTx.clear();
       appSettings.lastEndDayAt = Date.now();
       saveJSON(KEY_SETTINGS, appSettings);
-      refreshViews();
-      refreshCheckoutExtras();
-      renderBoardFilters();
-      renderArchiveInfo();
-      updateEndDayBadge();
+      endDayBannerDismissedOn = null;
+      refreshViews(); refreshCheckoutExtras();
+      renderBoardFilters(); renderArchiveInfo(); updateEndDayBadge();
       toast(`Day closed (${localDateStr()}). ${terminal.length} archived. ${open.length} still open.`);
     }
     function exportFinalDay() {
       if (transactions.length === 0) { toast('Nothing to export.'); return false; }
       const covered = coveredDates(transactions);
       const closedOn = localDateStr();
-      const datePart = covered.length === 0
-        ? closedOn
-        : covered.length === 1
-          ? covered[0]
-          : `${covered[0]}_to_${covered[covered.length - 1]}`;
+      const datePart = covered.length === 0 ? closedOn : covered.length === 1 ? covered[0] : `${covered[0]}_to_${covered[covered.length - 1]}`;
       const payload = {
         schema_version: SCHEMA_VERSION,
         export_type: 'orders',
+        export_mode: 'incremental',
+        include_archive: false,
         exported_at: new Date().toISOString(),
         is_final: true,
         closed_on: closedOn,
@@ -1795,13 +2327,20 @@
         currency: 'PHP',
         money_unit: 'centavo',
         timezone: APP_TIMEZONE,
+        container_types: {
+          bilog: (appSettings.containerTypes.bilog || {}).label || 'Bilog',
+          faucet: (appSettings.containerTypes.faucet || {}).label || 'Faucet'
+        },
+        riders: {
+          rider_a: (appSettings.riders.rider_a || {}).label || 'Rider A',
+          rider_b: (appSettings.riders.rider_b || {}).label || 'Rider B'
+        },
         orders: transactions.map(toCanonicalOrder)
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `orders_${datePart}_final.json`;
+      a.href = url; a.download = `orders_${datePart}_final.json`;
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
       appSettings.lastBackupAt = Date.now();
@@ -1821,13 +2360,20 @@
       const archive = loadJSON(KEY_ARCHIVE, []);
       if (!Array.isArray(archive) || archive.length === 0) { toast('Archive is empty.'); return; }
       const payload = {
-        schema_version: SCHEMA_VERSION,
-        export_type: 'orders',
+        schema_version: SCHEMA_VERSION, export_type: 'orders',
+        export_mode: 'archive_only',
+        include_archive: true,
         exported_at: new Date().toISOString(),
         app: { name: APP_NAME, version: APP_VERSION },
-        currency: 'PHP',
-        money_unit: 'centavo',
-        timezone: APP_TIMEZONE,
+        currency: 'PHP', money_unit: 'centavo', timezone: APP_TIMEZONE,
+        container_types: {
+          bilog: (appSettings.containerTypes.bilog || {}).label || 'Bilog',
+          faucet: (appSettings.containerTypes.faucet || {}).label || 'Faucet'
+        },
+        riders: {
+          rider_a: (appSettings.riders.rider_a || {}).label || 'Rider A',
+          rider_b: (appSettings.riders.rider_b || {}).label || 'Rider B'
+        },
         orders: archive.map(toCanonicalOrder)
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1841,53 +2387,41 @@
     function purgeArchive() {
       const archive = loadJSON(KEY_ARCHIVE, []);
       if (!Array.isArray(archive) || archive.length === 0) { toast('Archive is empty.'); return; }
-      openConfirmModal({
-        title: 'Clear archive?',
-        desc: `${archive.length} archived orders will be permanently removed. Back them up first if you need them.`,
-        okLabel: 'Clear',
+      confirmDelete({
+        title: 'Delete archive?',
+        item: `${archive.length} archived order${archive.length === 1 ? '' : 's'}`,
+        instruction: 'All archived orders will be permanently deleted. Export them first if you need to keep a copy.',
+        okLabel: 'Delete archive',
         onConfirm: () => {
           saveJSON(KEY_ARCHIVE, []);
           renderArchiveInfo();
-          toast('Archive cleared.');
+          toast('Archive deleted.');
         }
       });
     }
 
-    const SCHEMA_SPEC = {
-      $schema: 'https://json-schema.org/draft/2020-12/schema',
-      $id: 'checkout-ledger/orders/v1',
-      title: 'Checkout Ledger — Orders Export',
-      type: 'object',
-      required: ['schema_version', 'export_type', 'exported_at', 'currency', 'money_unit', 'timezone', 'orders'],
-      properties: {
-        schema_version: { type: 'integer', const: 1 },
-        export_type: { type: 'string', const: 'orders' },
-        exported_at: { type: 'string', format: 'date-time' },
-        is_final: { type: 'boolean' },
-        closed_on: { type: 'string', format: 'date' },
-        covered_dates: { type: 'array', items: { type: 'string', format: 'date' } },
-        app: { type: 'object' },
-        currency: { type: 'string', const: 'PHP' },
-        money_unit: { type: 'string', const: 'centavo' },
-        timezone: { type: 'string' },
-        orders: { type: 'array' }
-      }
-    };
     function toCanonicalOrder(tx) {
       const delIso = deliveredAt(tx);
+      const paidIso = paidAt(tx);
       const voided = isVoided(tx);
       return {
         order_id: String(tx.id),
         created_at: iso(tx.date) || new Date().toISOString(),
         updated_at: iso(tx.updatedAt) || iso(tx.date) || new Date().toISOString(),
         delivered_at: delIso ? iso(delIso) : null,
+        paid_at: paidIso ? iso(paidIso) : null,
         voided_at: voided ? iso(tx.voided_at) : null,
         status: voided ? 'voided' : statusOf(tx),
         customer_name: tx.customer || 'no name',
         is_special: !!tx.isSpecial,
+        special_name: tx.special_name || null,
         quantity: toPosInt(tx.qty, 1),
         unit_price: toCentavos(toNum(tx.price, 0)),
         total_price: toCentavos(toNum(tx.total, 0)),
+        rider: tx.rider || null,
+        container_type: tx.container_type || null,
+        container_status: tx.container_status || null,
+        container_count: toPosInt(tx.container_count, 0) || 0,
         custom: tx.custom && typeof tx.custom === 'object' ? { ...tx.custom } : {},
         status_history: (tx.statusHistory || []).map(h => ({ status: h.status, at: iso(h.at) || h.at })),
         edits: (tx.edits || []).map(e => ({ at: iso(e.at) || e.at, changes: String(e.changes || '') }))
@@ -1901,88 +2435,34 @@
       const all = allExportedTx();
       if (all.length === 0) { toast('No data to export yet.'); return false; }
       const payload = {
-        schema_version: SCHEMA_VERSION,
-        export_type: 'orders',
+        schema_version: SCHEMA_VERSION, export_type: 'orders',
+        export_mode: 'full',
+        include_archive: true,
         exported_at: new Date().toISOString(),
         app: { name: APP_NAME, version: APP_VERSION },
-        currency: 'PHP',
-        money_unit: 'centavo',
-        timezone: APP_TIMEZONE,
+        currency: 'PHP', money_unit: 'centavo', timezone: APP_TIMEZONE,
+        container_types: {
+          bilog: (appSettings.containerTypes.bilog || {}).label || 'Bilog',
+          faucet: (appSettings.containerTypes.faucet || {}).label || 'Faucet'
+        },
+        riders: {
+          rider_a: (appSettings.riders.rider_a || {}).label || 'Rider A',
+          rider_b: (appSettings.riders.rider_b || {}).label || 'Rider B'
+        },
         orders: all.map(toCanonicalOrder)
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `orders_${localDateStr()}.json`;
+      a.href = url; a.download = `orders_${localDateStr()}_recovery.json`;
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
       appSettings.lastBackupAt = Date.now();
       saveJSON(KEY_SETTINGS, appSettings);
       if (isTableViewOpen()) renderTable();
-      toast(`Accounting export: ${all.length} order${all.length === 1 ? '' : 's'}.`);
+      toast(`Recovery export: ${all.length} order${all.length === 1 ? '' : 's'} (includes archive).`);
       return true;
     }
-    function downloadSchemaJSON() {
-      const blob = new Blob([JSON.stringify(SCHEMA_SPEC, null, 2)], { type: 'application/schema+json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `ledger-schema.v${SCHEMA_VERSION}.json`;
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-      toast('schema.json downloaded.');
-    }
-    function downloadSchemaMD() {
-      const md = [
-        `# Checkout Ledger — Orders Export Schema`, ``,
-        `**Version:** ${SCHEMA_VERSION}`, `**Format:** application/json`,
-        `**App:** ${APP_NAME} ${APP_VERSION}`, `**Timezone:** ${APP_TIMEZONE}`,
-        `**Currency:** PHP`, `**Money unit:** centavo (integer)`, ``,
-        `## Semantics`, ``,
-        `- \`status\` is the order's business state. \`voided\` is a distinct terminal state.`,
-        `- Revenue = sum of \`total_price\` where \`status === "delivered"\` and \`voided_at === null\`.`,
-        `- Daily/monthly grouping uses the calendar date of \`delivered_at\` in \`timezone\`.`,
-        `- All money is integer centavos. ₱20.00 is \`2000\`.`,
-        `- Import is idempotent: key on \`order_id\`, prefer newer \`updated_at\`.`,
-        `- **For specials, \`total_price\` is authoritative. Do NOT recompute \`total_price = unit_price × quantity\`.**`, ``,
-        `## File fields`, ``,
-        `| Field | Type | Required | Notes |`, `|---|---|---|---|`,
-        `| \`schema_version\` | integer | yes | 1 |`,
-        `| \`export_type\` | string | yes | "orders" |`,
-        `| \`exported_at\` | ISO 8601 | yes | |`,
-        `| \`is_final\` | boolean | no | true on End Day export |`,
-        `| \`closed_on\` | date | no | YYYY-MM-DD when End Day was pressed |`,
-        `| \`covered_dates\` | string[] | no | YYYY-MM-DD dates present in this file |`,
-        `| \`app\` | object | yes | |`,
-        `| \`currency\` | string | yes | "PHP" |`,
-        `| \`money_unit\` | string | yes | "centavo" |`,
-        `| \`timezone\` | string | yes | IANA |`,
-        `| \`orders\` | array | yes | |`, ``,
-        `## Order fields`, ``,
-        `| Field | Type | Notes |`, `|---|---|---|`,
-        `| \`order_id\` | string | primary key |`,
-        `| \`created_at\` | ISO 8601 | |`,
-        `| \`updated_at\` | ISO 8601 | |`,
-        `| \`delivered_at\` | ISO 8601 \\| null | |`,
-        `| \`voided_at\` | ISO 8601 \\| null | |`,
-        `| \`status\` | enum | not_started, preparing, otw, delivered, cancelled, voided |`,
-        `| \`customer_name\` | string | |`,
-        `| \`is_special\` | boolean | |`,
-        `| \`quantity\` | integer | ≥ 1 |`,
-        `| \`unit_price\` | integer | centavos |`,
-        `| \`total_price\` | integer | centavos |`,
-        `| \`custom\` | object | user-defined fields |`,
-        `| \`status_history\` | array | |`,
-        `| \`edits\` | array | post-delivery changes |`
-      ].join('\n') + '\n';
-      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `ledger-schema.v${SCHEMA_VERSION}.md`;
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-      toast('schema.md downloaded.');
-    }
-
     function exportToExcel() {
       const all = allExportedTx();
       if (all.length === 0) { toast('No data to export yet.'); return false; }
@@ -1996,10 +2476,15 @@
           Quantity: toPosInt(t.qty, 1),
           [`Unit Price (${cur})`]: Number(toNum(t.price, 0).toFixed(2)),
           [`Total Price (${cur})`]: Number(toNum(t.total, 0).toFixed(2)),
-          Special: t.isSpecial ? 'Yes' : 'No',
+          Special: t.isSpecial ? (t.special_name || 'Yes') : 'No',
           Status: isVoided(t) ? 'voided' : statusLabel(statusOf(t)),
-          'Voided At': isVoided(t) ? formatDate(t.voided_at, true) : '',
           'Delivered At': deliveredAt(t) ? formatDate(deliveredAt(t), true) : '',
+          'Paid At': paidAt(t) ? formatDate(paidAt(t), true) : '',
+          Rider: t.rider ? riderLabel(t.rider) : '',
+          'Container Type': t.container_type ? containerTypeLabel(t.container_type) : '',
+          'Container Status': t.container_status ? containerStatusLabel(t.container_status) : '',
+          'Container Count': toPosInt(t.container_count, 0) || 0,
+          'Voided At': isVoided(t) ? formatDate(t.voided_at, true) : '',
           'Minutes to Deliver': minutesToDeliver(t) != null ? minutesToDeliver(t) : ''
         };
         cols.forEach(col => { row[col.name] = (t.custom && t.custom[col.id]) ? String(t.custom[col.id]) : ''; });
@@ -2020,13 +2505,21 @@
       if (all.length === 0) { toast('No data to export yet.'); return false; }
       const cur = appSettings.currency;
       const cols = appSettings.customColumns || [];
-      const headers = ['Date', 'Time', 'Customer Name', 'Quantity', `Unit Price (${cur})`, `Total Price (${cur})`, 'Special', 'Status', 'Voided At', 'Delivered At', 'Minutes to Deliver', ...cols.map(c => c.name)];
+      const headers = ['Date', 'Time', 'Customer Name', 'Quantity', `Unit Price (${cur})`, `Total Price (${cur})`,
+        'Special', 'Status', 'Delivered At', 'Paid At', 'Rider', 'Container Type', 'Container Status', 'Container Count',
+        'Voided At', 'Minutes to Deliver', ...cols.map(c => c.name)];
       const rows = all.map(t => [
         formatDate(t.date), formatTime(t.date), t.customer || 'no name', toPosInt(t.qty, 1),
-        toNum(t.price, 0).toFixed(2), toNum(t.total, 0).toFixed(2), t.isSpecial ? 'Yes' : 'No',
+        toNum(t.price, 0).toFixed(2), toNum(t.total, 0).toFixed(2),
+        t.isSpecial ? (t.special_name || 'Yes') : 'No',
         isVoided(t) ? 'voided' : statusLabel(statusOf(t)),
-        isVoided(t) ? formatDate(t.voided_at, true) : '',
         deliveredAt(t) ? formatDate(deliveredAt(t), true) : '',
+        paidAt(t) ? formatDate(paidAt(t), true) : '',
+        t.rider ? riderLabel(t.rider) : '',
+        t.container_type ? containerTypeLabel(t.container_type) : '',
+        t.container_status ? containerStatusLabel(t.container_status) : '',
+        toPosInt(t.container_count, 0) || 0,
+        isVoided(t) ? formatDate(t.voided_at, true) : '',
         minutesToDeliver(t) != null ? minutesToDeliver(t) : '',
         ...cols.map(c => (t.custom && t.custom[c.id]) ? String(t.custom[c.id]) : '')
       ]);
@@ -2048,6 +2541,7 @@
     function backupJSON() {
       const payload = {
         schema_version: SCHEMA_VERSION,
+        export_type: 'app_backup',
         app: { name: APP_NAME, version: APP_VERSION },
         exportedAt: new Date().toISOString(),
         settings: appSettings, presets: presetsConfig, customers: savedCustomers,
@@ -2081,7 +2575,7 @@
             }
             openConfirmModal({
               title: 'Restore backup?',
-              desc: `This replaces all current data with the backup from ${data.exportedAt ? formatDate(data.exportedAt, true) : 'unknown time'}.`,
+              desc: `This replaces all current data with the backup from ${data.exportedAt ? formatDate(data.exportedAt, true) : 'unknown time'}.\n\nAll current orders, settings, and archive will be replaced with the backup contents.`,
               okLabel: 'Restore',
               onConfirm: () => {
                 if (data.settings) appSettings = mergeSettings(data.settings);
@@ -2100,7 +2594,8 @@
                 currentPrice = appSettings.refUnitPrice; priceTouched = false; isSpecialOverride = false;
                 setDisplayedPrice(currentPrice); setDisplayedQty(1);
                 renderAllSettingsEditors(); renderTierButtons(); renderQtyPresetButtons();
-                renderSavedCustomerChips(); syncPresetUI(); applyCashVisibility();
+                renderSavedCustomerChips(); syncPresetUI(); applyCashVisibility(); applyTextScale();
+                updateDeliveryDisplay(); updateContainerDisplay();
                 updateTotalPreview(); refreshViews(); refreshCheckoutExtras();
                 toast('Backup restored.');
               }
@@ -2180,22 +2675,6 @@
     })();
 
     (function setupPWA() {
-      try {
-        const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#10b981"/><text x="256" y="340" font-family="Arial" font-size="260" font-weight="bold" fill="#fff" text-anchor="middle">₱</text></svg>';
-        const iconUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(iconSvg)));
-        const manifest = {
-          name: 'Quick Checkout Ledger', short_name: 'Ledger',
-          description: 'Minimal bookkeeping for a single product.',
-          start_url: location.pathname + location.search, scope: location.pathname,
-          display: 'standalone', orientation: 'any',
-          background_color: '#f1f5f9', theme_color: '#10b981',
-          icons: [{ src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
-                  { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' }]
-        };
-        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-        const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
-        document.head.appendChild(link);
-      } catch (_) {}
       if ((location.protocol === 'http:' || location.protocol === 'https:') && 'serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./service-worker.js').catch(() => {});
@@ -2221,10 +2700,16 @@
       });
     }
 
+    applyTextScale();
     updateHeaderDate();
-    setInterval(updateHeaderDate, 60000);
+    updateEndDayBanner();
+    setInterval(function () {
+      updateHeaderDate();
+      updateEndDayBanner();
+    }, 60000);
     renderTierButtons(); renderQtyPresetButtons(); renderAllSettingsEditors();
     syncPresetUI(); renderSavedCustomerChips(); applyCashVisibility();
+    updateDeliveryDisplay(); updateContainerDisplay();
     setDisplayedPrice(currentPrice); setDisplayedQty(1); updateTotalPreview();
     refreshCheckoutExtras(); renderBoardFilters(); renderArchiveInfo(); updateEndDayBadge();
     checkStoragePressure();
