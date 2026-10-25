@@ -1,5 +1,5 @@
 // service-worker.js — real offline support for the checkout ledger PWA
-const CACHE_VERSION = 'ledger-v1';
+const CACHE_VERSION = 'ledger-v2';
 const CORE = [
   './',
   './index.html',
