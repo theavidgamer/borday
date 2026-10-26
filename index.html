@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
   <title>Quick Checkout Ledger</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sheetjs@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -28,10 +28,40 @@
     details.settings-section > summary::-webkit-details-marker { display: none; }
     details.settings-section > summary .chev { transition: transform .15s ease; display: inline-block; }
     details.settings-section[open] > summary .chev { transform: rotate(180deg); }
-    .text-\[8px\]  { font-size: 0.5rem !important; }
-    .text-\[9px\]  { font-size: 0.5625rem !important; }
-    .text-\[10px\] { font-size: 0.625rem !important; }
-    .text-\[11px\] { font-size: 0.6875rem !important; }
+    .text-\[8px\], .text-\[9px\], .text-\[10px\] { font-size: 0.75rem !important; }
+    .text-\[11px\] { font-size: 0.8125rem !important; }
+    button, select, input { min-height: 36px; }
+    :focus-visible { outline: 3px solid #059669; outline-offset: 2px; }
+    
+    .text-scale-xl { font-size: 22px; }
+    
+    /* =========================================================
+       PANEL STACKING FIX
+       - Backdrop is a fixed transparent layer above all cards
+       - Active card bumps z-index above the backdrop
+       - Panels themselves are INLINE (no absolute positioning) so
+         they push content naturally and cannot be clipped.
+    ========================================================= */
+    #panel-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: transparent;
+    }
+    #panel-backdrop.active {
+      display: block;
+    }
+    .checkout-card {
+      position: relative;
+      z-index: 10;
+    }
+    .checkout-card.card-active {
+      z-index: 30 !important;
+    }
+    /* The Add Order button stays clickable above the backdrop */
+    #add-order-btn { z-index: 25; }
+
     @media print {
       body.printing-board > *:not(#board-view) { display: none !important; }
       body.printing-board #board-view { display: flex !important; position: static !important; background: #fff !important; }
@@ -50,12 +80,14 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center justify-between p-4 selection:bg-emerald-500 selection:text-white">
 
+  <!-- Invisible backdrop to close panels safely when tapping outside -->
+  <div id="panel-backdrop" onclick="closePanels()"></div>
+
   <div id="multi-tab-banner" class="hidden w-full max-w-md md:max-w-3xl mb-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl p-2.5 text-xs font-semibold items-center justify-between gap-2">
     <span>⚠️ Another tab is open. Use only one window.</span>
     <button type="button" onclick="location.reload()" class="px-2 py-0.5 bg-amber-600 text-white rounded-md text-[10px] font-bold">Reload</button>
   </div>
 
-  <!-- END DAY REMINDER BANNER -->
   <div id="end-day-banner" class="hidden w-full max-w-md md:max-w-3xl mb-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl p-2.5 text-xs font-semibold items-center justify-between gap-2">
     <span id="end-day-banner-text" class="flex-1">⚠️ End Day not run today.</span>
     <div class="flex gap-1 shrink-0">
@@ -111,7 +143,7 @@
           <button type="button" onclick="clearActiveMode()" class="text-[10px] text-purple-500 hover:text-purple-700 font-bold">Clear</button>
         </div>
 
-        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+        <div class="checkout-card bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
           <div class="flex justify-between items-center mb-1">
             <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Unit Price</label>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
@@ -132,18 +164,23 @@
           </div>
         </div>
 
-        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+        <div class="checkout-card bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
           <div class="flex justify-between items-center mb-1">
             <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Quantity</label>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Adjust</span>
           </div>
-          <div id="qty-display-container">
-            <button type="button" onclick="toggleQtyOptions()" class="w-full text-left py-1 flex items-baseline justify-between group">
-              <span id="display-qty" class="text-2xl font-extrabold text-slate-900 group-active:scale-95 transition">1 pc</span>
-              <span class="text-xs text-emerald-600 font-semibold group-hover:underline">Quick Presets ▾</span>
-            </button>
+          
+          <div class="flex items-center justify-between mt-2">
+            <button type="button" onclick="adjustCheckoutQty(-1)" class="w-14 h-14 bg-slate-100 hover:bg-slate-200 rounded-2xl flex items-center justify-center text-3xl font-black text-slate-600 active:scale-95 transition">-</button>
+            <div id="qty-display-container" class="flex-1 text-center">
+              <button type="button" onclick="toggleQtyOptions()" class="w-full py-1 group">
+                <span id="display-qty" class="text-4xl font-black text-slate-900 group-active:scale-95 transition">1</span>
+              </button>
+            </div>
+            <button type="button" onclick="adjustCheckoutQty(1)" class="w-14 h-14 bg-emerald-100 hover:bg-emerald-200 rounded-2xl flex items-center justify-center text-3xl font-black text-emerald-700 active:scale-95 transition">+</button>
           </div>
-          <div id="qty-direct-input-container" class="hidden py-1">
+
+          <div id="qty-direct-input-container" class="hidden py-1 mt-2">
             <div class="flex items-center gap-2">
               <input type="number" id="direct-qty-input" min="1" step="1" value="1" inputmode="numeric"
                      oninput="applyDirectQty(this.value)"
@@ -152,6 +189,7 @@
               <button type="button" onclick="toggleQtyInputMode(false)" class="bg-emerald-500 text-white font-bold px-3 py-2 rounded-2xl text-xs">OK</button>
             </div>
           </div>
+          
           <div id="qty-options" class="hidden mt-2 pt-2 border-t border-slate-100 space-y-2">
             <div id="qty-preset-buttons" class="grid grid-cols-5 gap-1.5"></div>
             <button type="button" onclick="toggleQtyInputMode(true)" class="w-full py-1.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-600">Enter exact quantity…</button>
@@ -160,7 +198,7 @@
       </div>
 
       <div class="flex flex-col gap-3">
-        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200 relative">
+        <div class="checkout-card bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
           <div class="flex justify-between items-center mb-1">
             <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Name</label>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Select</span>
@@ -184,7 +222,7 @@
           </div>
         </div>
 
-        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+        <div class="checkout-card bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
           <div class="flex justify-between items-center mb-1">
             <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Delivery</label>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
@@ -198,7 +236,7 @@
           </div>
         </div>
 
-        <div class="bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
+        <div class="checkout-card bg-white p-3.5 rounded-3xl shadow-sm border border-slate-200">
           <div class="flex justify-between items-center mb-1">
             <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Container</label>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Tap to Change</span>
@@ -240,7 +278,7 @@
           </div>
         </div>
 
-        <button type="button" onclick="addTransaction()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-extrabold py-4 rounded-3xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition">
+        <button type="button" id="add-order-btn" onclick="addTransaction()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-extrabold py-4 rounded-3xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 transition relative">
           <span class="text-2xl font-black">+</span>
           <span class="text-base tracking-wide uppercase">Add Order (<span id="total-price-preview">₱20.00</span>)</span>
         </button>
@@ -345,6 +383,22 @@
         </details>
 
         <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
+          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Price Tiers</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
+          <div class="px-3 pb-3 space-y-2">
+            <div class="flex justify-end"><button type="button" onclick="addTierRow()" class="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold rounded-lg">+ Add</button></div>
+            <div id="tier-editor" class="space-y-1"></div>
+          </div>
+        </details>
+
+        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
+          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Quantity Presets</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
+          <div class="px-3 pb-3 space-y-2">
+            <div class="flex justify-end"><button type="button" onclick="addQtyPresetRow()" class="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold rounded-lg">+ Add</button></div>
+            <div id="qty-preset-editor" class="space-y-1"></div>
+          </div>
+        </details>
+
+        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Riders</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-1.5 text-xs">
             <div><label class="text-[10px] text-slate-600 font-bold">Rider A</label>
@@ -367,28 +421,13 @@
         </details>
 
         <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
-          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Price Tiers</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
-          <div class="px-3 pb-3 space-y-2">
-            <div class="flex justify-end"><button type="button" onclick="addTierRow()" class="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold rounded-lg">+ Add</button></div>
-            <div id="tier-editor" class="space-y-1"></div>
-          </div>
-        </details>
-
-        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
-          <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Quantity Presets</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
-          <div class="px-3 pb-3 space-y-2">
-            <div class="flex justify-end"><button type="button" onclick="addQtyPresetRow()" class="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold rounded-lg">+ Add</button></div>
-            <div id="qty-preset-editor" class="space-y-1"></div>
-          </div>
-        </details>
-
-        <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Cash Received</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-1">
             <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
               <input id="cfg-show-cash" type="checkbox" onchange="saveFromEditors()" class="w-4 h-4 accent-emerald-600">
               <span>Show cash &amp; change on checkout</span>
             </label>
+            <span class="text-[10px] text-slate-400 block">Off by default. A change calculator on the checkout screen — not saved with orders.</span>
           </div>
         </details>
 
@@ -406,13 +445,14 @@
         <details class="settings-section no-print bg-slate-50 rounded-2xl border border-slate-100">
           <summary class="px-3 py-2 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Text Scale</span><span class="chev text-slate-400 text-[10px]">▾</span></summary>
           <div class="px-3 pb-3 space-y-2">
-            <div class="grid grid-cols-4 gap-1">
+            <div class="grid grid-cols-5 gap-1">
               <button type="button" data-scale="auto" onclick="setTextScale('auto')" class="py-2 rounded-xl text-[11px] font-bold">Auto</button>
               <button type="button" data-scale="small" onclick="setTextScale('small')" class="py-2 rounded-xl text-[11px] font-bold">S</button>
               <button type="button" data-scale="medium" onclick="setTextScale('medium')" class="py-2 rounded-xl text-[11px] font-bold">M</button>
               <button type="button" data-scale="large" onclick="setTextScale('large')" class="py-2 rounded-xl text-[11px] font-bold">L</button>
+              <button type="button" data-scale="xl" onclick="setTextScale('xl')" class="py-2 rounded-xl text-[11px] font-bold">XL</button>
             </div>
-            <span class="text-[10px] text-slate-400 block">Auto follows your device setting. S/M/L override.</span>
+            <span class="text-[10px] text-slate-400 block">Auto follows your device setting. S/M/L/XL override.</span>
           </div>
         </details>
 
@@ -424,20 +464,19 @@
               <button type="button" onclick="exportArchive()" class="flex-1 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded-lg">Export archive</button>
               <button type="button" onclick="purgeArchive()" class="flex-1 py-1.5 bg-red-600 text-white text-[10px] font-bold rounded-lg">Delete archive</button>
             </div>
+            <span class="text-[10px] text-slate-400 block">Archived orders from previous End Day runs.</span>
           </div>
         </details>
       </div>
 
       <div class="no-print space-y-2 pt-2 border-t border-slate-100 mt-3">
-        <button id="btn-install" type="button" onclick="promptInstall()" class="hidden w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📲 Install App</button>
-
         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Recovery</div>
-        <button type="button" onclick="exportToAccounting()" class="w-full py-2.5 bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📦 Full Recovery Export (JSON)</button>
-        <span class="text-[10px] text-slate-400 block leading-snug">Full snapshot <strong>including archive</strong>. Only for disaster recovery, or for first-time setup of the accounting app. <strong>Do not use daily</strong> — use End Day for that.</span>
+        <button type="button" onclick="exportToAccounting()" class="w-full py-2.5 bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📦 Full Recovery Export</button>
+        <span class="text-[10px] text-slate-400 block leading-snug">Full snapshot including archive. For disaster recovery only.</span>
 
-        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Backup & Human Exports</div>
-        <button type="button" onclick="backupJSON()" class="w-full py-2.5 bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">💾 Backup JSON (all)</button>
-        <span class="text-[10px] text-slate-400 block leading-snug">App state: settings, presets, customers, orders, archive, column order. <strong>The only file that can restore this app</strong> on a new device.</span>
+        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Backup &amp; Human Exports</div>
+        <button type="button" onclick="backupJSON()" class="w-full py-2.5 bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">💾 Backup JSON</button>
+        <span class="text-[10px] text-slate-400 block leading-snug">App state: settings, presets, customers, orders, archive, column order. The only file that can restore this app on a new device.</span>
         <button type="button" onclick="restoreJSON()" class="w-full py-2.5 bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📥 Restore JSON</button>
         <span class="text-[10px] text-slate-400 block leading-snug">Load a Backup JSON file to restore the app.</span>
         <button type="button" onclick="exportToExcel()" class="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">📊 Export Excel</button>
@@ -452,37 +491,36 @@
     <div class="no-print flex items-center justify-between gap-2 bg-white border-b border-slate-200 px-3 py-2 shrink-0">
       <div class="flex items-center gap-2 min-w-0">
         <button type="button" onclick="closeBoardView()" class="p-1.5 text-slate-500 hover:text-slate-800 font-bold text-lg leading-none rounded-lg hover:bg-slate-100" aria-label="Close">✕</button>
-        <div class="min-w-0">
-          <h2 class="text-sm font-bold text-slate-800 leading-tight">Order Board</h2>
-          <p class="text-[10px] text-slate-400 leading-tight truncate">First come, first served · change status inline</p>
-        </div>
+        <div class="min-w-0"><h2 class="text-sm font-bold text-slate-800 leading-tight">Order Board</h2></div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         <button type="button" onclick="addCustomColumn()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl">+ Column</button>
         <button type="button" onclick="printBoard()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold rounded-xl">🖨️ Print</button>
-        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl">📦 Recovery</button>
       </div>
     </div>
-    <div class="flex-1 overflow-auto">
-      <div class="p-2 sm:p-3">
-        <div id="board-filters" class="flex items-center gap-1 flex-wrap mb-2 no-print"></div>
-        <div id="board-bulk-bar" class="hidden bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 mb-2 flex items-center justify-between gap-2 no-print">
-          <span id="board-bulk-count" class="text-[11px] font-bold text-slate-700">0 selected</span>
+
+    <div class="flex-1 overflow-auto p-2 sm:p-4">
+      <div class="bg-white rounded-2xl shadow-lg border-2 border-slate-300 overflow-hidden mb-4">
+        <div class="bg-slate-800 text-white px-4 py-3 flex justify-between items-center">
+          <h2 class="text-lg font-bold uppercase tracking-wider flex items-center gap-2">📋 Order Board</h2>
+          <button type="button" onclick="openStatsModal()" class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition shadow-sm">📊 Stats</button>
+        </div>
+        <div id="board-filters" class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center gap-2 flex-wrap no-print"></div>
+        <div id="board-bulk-bar" class="hidden bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-2 no-print">
+          <span id="board-bulk-count" class="text-sm font-bold text-slate-700">0 selected</span>
           <div class="flex gap-1">
-            <button type="button" onclick="bulkSetStatus('delivered')" class="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">Delivered</button>
-            <button type="button" onclick="bulkSetStatus('paid')" class="px-2 py-1 bg-green-600 text-white text-[10px] font-bold rounded">Paid</button>
-            <button type="button" onclick="bulkSetStatus('cancelled')" class="px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded">Cancelled</button>
-            <button type="button" onclick="clearSelection()" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] font-bold rounded">Clear</button>
+            <button type="button" onclick="bulkSetStatus('delivered')" class="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm">Delivered</button>
+            <button type="button" onclick="bulkSetStatus('paid')" class="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg shadow-sm">Paid</button>
+            <button type="button" onclick="bulkSetStatus('cancelled')" class="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg shadow-sm">Cancelled</button>
+            <button type="button" onclick="clearSelection()" class="px-3 py-1.5 bg-slate-300 text-slate-800 text-xs font-bold rounded-lg">Clear</button>
           </div>
         </div>
-        <div class="overflow-x-auto">
-          <table id="board-table" class="w-full text-xs bg-white rounded-xl overflow-hidden shadow-sm"></table>
-        </div>
-        <div id="board-stats" class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3"></div>
+        <div class="overflow-x-auto"><table id="board-table" class="w-full text-sm"></table></div>
       </div>
+      <div id="board-stats" class="grid grid-cols-2 md:grid-cols-5 gap-2"></div>
     </div>
     <div class="no-print shrink-0 px-3 py-1.5 text-[10px] text-slate-500 bg-white border-t border-slate-200 text-center">
-      Only paid orders appear in the Sales Table — mark paid to finalize.
+      Paid orders with 0 containers are in the Sales Table. Paid orders with containers still out stay here.
     </div>
   </div>
 
@@ -499,7 +537,6 @@
       <div class="flex items-center gap-1.5 shrink-0">
         <button type="button" onclick="resetColumnOrder()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-xl">Reset Columns</button>
         <button type="button" onclick="printTable()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold rounded-xl">🖨️ Print</button>
-        <button type="button" onclick="exportToAccounting()" class="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl">📦 Recovery</button>
         <button type="button" onclick="exportToCSV()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-xl">📄 CSV</button>
       </div>
     </div>
@@ -507,7 +544,7 @@
       <table id="sales-table" class="min-w-[1100px] w-full text-xs bg-white rounded-xl overflow-hidden shadow-sm"></table>
     </div>
     <div class="no-print shrink-0 px-3 py-1.5 text-[10px] text-slate-500 bg-white border-t border-slate-200 text-center">
-      Paid only. Rows are soft-deleted (voided) — they stay in exports for audit.
+      Paid only. Click ✏️ to edit, ✕ to void. Changes are logged and lock the row until the next export.
       <span id="table-last-export" class="block text-slate-400"></span>
     </div>
   </div>
@@ -529,17 +566,99 @@
     </div>
   </div>
 
+  <!-- RETURN CONTAINERS MODAL -->
+  <div id="return-container-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[75] items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-6" role="dialog">
+      <div class="text-center">
+        <h3 class="text-2xl font-black text-slate-800">Return Containers</h3>
+        <p id="return-customer-name" class="text-lg font-bold text-slate-500 mt-1">Customer</p>
+      </div>
+      <div class="bg-slate-50 rounded-2xl p-4 text-center border-2 border-slate-200">
+        <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-2">Currently Out</span>
+        <span id="return-current-out" class="text-3xl font-black text-slate-800">0</span>
+        <span id="return-container-type" class="text-lg font-bold text-slate-500 ml-1">Faucet</span>
+      </div>
+      <div class="space-y-3">
+        <label class="text-sm font-bold text-slate-500 uppercase tracking-wider block text-center">How many are they returning?</label>
+        <div class="flex items-center gap-3">
+          <button type="button" onclick="adjustReturnCount(-1)" class="w-16 h-16 bg-slate-200 hover:bg-slate-300 active:scale-95 rounded-2xl flex items-center justify-center text-3xl font-black text-slate-700">-</button>
+          <input type="number" id="return-qty-input" min="1" step="1" oninput="validateReturnInput()" class="flex-1 h-16 bg-white border-2 border-emerald-500 rounded-2xl px-4 text-3xl font-black text-center text-slate-800 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+          <button type="button" onclick="adjustReturnCount(1)" class="w-16 h-16 bg-slate-200 hover:bg-slate-300 active:scale-95 rounded-2xl flex items-center justify-center text-3xl font-black text-slate-700">+</button>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2 pt-2">
+        <button type="button" onclick="returnAllContainers()" class="w-full py-4 bg-blue-100 hover:bg-blue-200 active:scale-95 text-blue-800 rounded-2xl font-black text-lg transition">Return ALL</button>
+        <button type="button" onclick="submitContainerReturn()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl font-black text-lg shadow-lg shadow-emerald-200 transition">Confirm Return</button>
+        <button type="button" onclick="closeReturnModal()" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm mt-2">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT ORDER MODAL -->
+  <div id="edit-order-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" role="dialog">
+      <h3 class="text-lg font-bold text-slate-800">Edit Order</h3>
+      <div id="edit-warning" class="hidden bg-amber-100 text-amber-800 text-xs font-bold p-2 rounded-lg text-center">⚠️ This order is already Paid. Updating it will change your Sales Table totals.</div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Customer Name</label>
+        <input type="text" id="edit-customer" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-base font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Special Deal</label>
+        <select id="edit-special" onchange="handleEditSpecialChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-base font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"></select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Quantity</label>
+          <input type="number" id="edit-qty" min="1" step="1" oninput="syncEditForm('qty')" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-base font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"></div>
+        <div><label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Unit Price</label>
+          <input type="number" id="edit-price" min="0" step="0.01" oninput="syncEditForm('price')" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-base font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"></div>
+      </div>
+      <div><label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Total Price</label>
+        <input type="number" id="edit-total" min="0" step="0.01" oninput="syncEditForm('total')" class="w-full bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-lg font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"></div>
+
+      <div class="border-t pt-3 mt-3">
+        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Containers</h4>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <div><label class="text-[10px] font-bold text-slate-500 block">Type</label>
+            <select id="edit-container-type" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"><option value="">None</option></select></div>
+          <div><label class="text-[10px] font-bold text-slate-500 block">Status</label>
+            <select id="edit-container-status" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm">
+              <option value="">None</option>
+              <option value="given">Bought (Customer keeps)</option>
+              <option value="to_be_given">Borrowed (Will return)</option>
+            </select></div>
+        </div>
+        <div><label class="text-[10px] font-bold text-slate-500 block">Containers Out (Owed)</label>
+          <input type="number" id="edit-container-out" min="0" step="1" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"></div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeEditOrderModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm">Cancel</button>
+        <button type="button" onclick="saveEditOrder()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS MODAL -->
+  <div id="stats-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="text-lg font-bold text-slate-800">📊 Statistics</h3>
+        <button type="button" onclick="closeStatsModal()" class="p-1 text-slate-400 hover:text-slate-800 font-bold text-xl" aria-label="Close">✕</button>
+      </div>
+      <div id="stats-content" class="space-y-4"></div>
+    </div>
+  </div>
+
   <!-- MULTI-TAB WARNING -->
   <div id="multi-tab-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[75] items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg p-5 md:p-7 space-y-3 md:space-y-4 text-center" role="alertdialog" aria-modal="true">
       <div class="text-3xl md:text-5xl">⚠️</div>
       <h3 class="text-sm md:text-lg font-bold text-slate-800">Another instance of this app is open</h3>
-      <p class="text-xs md:text-base text-slate-600 leading-relaxed">
-        This app is already running in another tab or window. Using multiple copies at the same time can cause orders to be lost or overwritten.
-      </p>
-      <p class="text-xs md:text-base text-slate-700 font-semibold">
-        Please close the other tab and use only one window.
-      </p>
+      <p class="text-xs md:text-base text-slate-600 leading-relaxed">This app is already running in another tab or window. Using multiple copies at the same time can cause orders to be lost or overwritten.</p>
       <button type="button" onclick="dismissMultiTab()" class="w-full py-2 md:py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs md:text-sm rounded-xl">I understand</button>
     </div>
   </div>
@@ -547,9 +666,9 @@
   <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg max-w-[90%] text-center"></div>
 
   <script>
-    const SCHEMA_VERSION = 2;
+    const SCHEMA_VERSION = 3;
     const APP_NAME = 'checkout-ledger';
-    const APP_VERSION = '2.0.0';
+    const APP_VERSION = '2.3.0';
     const APP_TIMEZONE = (function () {
       try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila'; }
       catch (_) { return 'Asia/Manila'; }
@@ -571,34 +690,30 @@
       } catch (err) { return fallback; }
     }
     function saveJSON(key, value) {
-      try { localStorage.setItem(key, JSON.stringify(value)); }
-      catch (err) { toast('Storage full — data may not persist.'); }
+      try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+      catch (err) { toast('⚠️ Could not save! Storage full. Export a Backup JSON now.'); return false; }
     }
     function saveTransactions() {
-      try {
-        const stored = loadJSON(KEY_TXS, []);
-        if (Array.isArray(stored)) {
-          const byId = new Map();
-          transactions.forEach(t => { if (t && t.id != null) byId.set(String(t.id), t); });
-          stored.forEach(t => {
-            if (!t || t.id == null) return;
-            const key = String(t.id);
-            const existing = byId.get(key);
-            if (!existing) { byId.set(key, t); return; }
-            const memU = toNum(existing.updatedAt, 0);
-            const storeU = toNum(t.updatedAt, 0);
-            if (storeU > memU) byId.set(key, t);
-          });
-          transactions = Array.from(byId.values()).sort((a, b) => {
-            const da = new Date(a.date).getTime() || 0;
-            const db = new Date(b.date).getTime() || 0;
-            if (da !== db) return db - da;
-            return toNum(b.updatedAt, 0) - toNum(a.updatedAt, 0);
-          });
-        }
-      } catch (_) {}
-      saveJSON(KEY_TXS, transactions);
+      // Single writer: in-memory state is the source of truth. (The old merge-with-storage
+      // logic resurrected archived orders after End Day.) A multi-tab banner warns instead.
+      transactions.sort((a, b) => {
+        const da = new Date(a.date).getTime() || 0;
+        const db = new Date(b.date).getTime() || 0;
+        if (da !== db) return db - da;
+        return toNum(b.updatedAt, 0) - toNum(a.updatedAt, 0);
+      });
+      const ok = saveJSON(KEY_TXS, transactions);
       checkStoragePressure();
+      return ok;
+    }
+    function takeSnapshot(reason) {
+      // Rolling safety copy of everything, kept on-device (not a substitute for a file backup).
+      try {
+        localStorage.setItem('bookkeeping_snapshot', JSON.stringify({
+          reason, at: new Date().toISOString(), transactions,
+          archive: loadJSON(KEY_ARCHIVE, []), settings: appSettings, presets: presetsConfig, customers: savedCustomers
+        }));
+      } catch (_) {}
     }
     function checkStoragePressure() {
       try {
@@ -610,6 +725,7 @@
       } catch (_) {}
     }
 
+    function safeId(v) { return String(v).replace(/[^A-Za-z0-9_-]/g, ''); }
     function esc(v) {
       return String(v).replace(/[&<>"']/g, c => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -703,7 +819,7 @@
       return null;
     }
     function paidAt(tx) {
-      if (!tx.statusHistory) return null;
+      if (!tx.statusHistory || statusOf(tx) !== 'paid') return null;
       for (let i = tx.statusHistory.length - 1; i >= 0; i--) {
         if (tx.statusHistory[i].status === 'paid') return tx.statusHistory[i].at;
       }
@@ -746,7 +862,7 @@
       cfg.lastBackupAt = Math.max(0, toNum(saved.lastBackupAt, 0));
       cfg.lastEndDayAt = Math.max(0, toNum(saved.lastEndDayAt, 0));
       cfg.showCash = !!saved.showCash;
-      cfg.textScale = ['auto','small','medium','large'].includes(saved.textScale) ? saved.textScale : 'auto';
+      cfg.textScale = ['auto','small','medium','large','xl'].includes(saved.textScale) ? saved.textScale : 'auto';
       if (saved.riders && typeof saved.riders === 'object') {
         ['rider_a', 'rider_b'].forEach(k => {
           const r = saved.riders[k];
@@ -781,7 +897,7 @@
           const name = (typeof c.name === 'string' && c.name.trim()) ? c.name.trim() : '';
           if (!name) return;
           let id = (typeof c.id === 'string' && c.id.trim()) ? c.id.trim() : '';
-          if (!id || seen.has(id)) id = 'col_' + Math.random().toString(36).slice(2, 9);
+          id = safeId(id); if (!id || seen.has(id)) id = 'col_' + Math.random().toString(36).slice(2, 9);
           seen.add(id); cols.push({ id, name });
         });
         cfg.customColumns = cols;
@@ -801,8 +917,8 @@
       return ct ? ct.label : key;
     }
     function containerStatusLabel(key) {
-      if (key === 'given') return 'Given';
-      if (key === 'to_be_given') return 'To be given';
+      if (key === 'given') return 'Bought (Customer keeps)';
+      if (key === 'to_be_given') return 'Borrowed (Will return)';
       return '';
     }
 
@@ -853,20 +969,17 @@
 
     (function migrate() {
       transactions.forEach(t => {
-        if (t.id != null) t.id = String(t.id);
+        if (t.id != null) t.id = safeId(t.id);
         if (!t.updatedAt) t.updatedAt = toNum(new Date(t.date).getTime(), Date.now());
         if (t.rider === undefined) t.rider = null;
         if (t.container_type === undefined) t.container_type = null;
         if (t.container_status === undefined) t.container_status = null;
         if (t.container_count === undefined) t.container_count = 0;
-        if (t.isSpecial && !t.special_name) t.special_name = 'Special';
-        if (t.status === 'delivered') {
-          const delAt = deliveredAt(t) || new Date(t.updatedAt || Date.now()).toISOString();
-          t.status = 'paid';
-          t.statusHistory = t.statusHistory || [];
-          const alreadyPaid = t.statusHistory.some(h => h.status === 'paid');
-          if (!alreadyPaid) t.statusHistory.push({ status: 'paid', at: delAt });
+        if (t.container_out_count === undefined) {
+          t.container_out_count = (t.container_count > 0 && t.container_status === 'to_be_given') ? t.container_count : 0;
         }
+        if (t.container_history === undefined) t.container_history = [];
+        if (t.isSpecial && !t.special_name) t.special_name = 'Special';
         if (!t.statusHistory && statusOf(t) === 'paid') {
           t.statusHistory = [{ status: 'paid', at: new Date(t.updatedAt || Date.now()).toISOString() }];
         }
@@ -891,8 +1004,12 @@
     let boardFilter = 'all';
     let boardSearch = '';
     let boardShowPaid = false;
+    let boardShowCancelled = false;
     let boardShowVoided = false;
     let selectedTx = new Set();
+
+    let editingTxId = null;
+    let returningTxId = null;
 
     const COLUMN_DEFS = {
       idx: { label: '#' }, customer: { label: 'Customer Name' },
@@ -973,14 +1090,8 @@
     function confirmDelete(opts) {
       const item = opts.item || '';
       const instruction = opts.instruction || 'This cannot be undone.';
-      const desc = `${item}\n\n${instruction}`.trim();
-      openConfirmModal({
-        title: opts.title || 'Delete?',
-        desc: desc,
-        okLabel: opts.okLabel || 'Delete',
-        onConfirm: opts.onConfirm,
-        onCancel: opts.onCancel
-      });
+      openConfirmModal({ title: opts.title || 'Delete?', desc: `${item}\n\n${instruction}`.trim(),
+        okLabel: opts.okLabel || 'Delete', onConfirm: opts.onConfirm, onCancel: opts.onCancel });
     }
     (function focusTrap() {
       const m = document.getElementById('app-modal');
@@ -1002,43 +1113,51 @@
     }
 
     const PANEL_IDS = ['price-options', 'qty-options', 'name-options', 'autocomplete-suggestions', 'delivery-options', 'container-options'];
+
     function closePanels(exceptId) {
-      PANEL_IDS.forEach(id => { if (id === exceptId) return; const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+      PANEL_IDS.forEach(id => {
+        if (id === exceptId) return;
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      const backdrop = document.getElementById('panel-backdrop');
+      if (backdrop) backdrop.classList.remove('active');
+      document.querySelectorAll('.checkout-card').forEach(c => c.classList.remove('card-active'));
     }
+
     function togglePanel(id) {
       const el = document.getElementById(id);
-      if (!el) return false;
-      const open = el.classList.contains('hidden');
-      closePanels(id);
-      el.classList.toggle('hidden', !open);
-      return open;
-    }
-    document.addEventListener('click', (e) => {
-      const target = e.target;
-      const anyOpen = PANEL_IDS.some(id => {
-        const el = document.getElementById(id);
-        return el && !el.classList.contains('hidden');
-      });
-      if (!anyOpen) return;
-      for (const id of PANEL_IDS) {
-        const el = document.getElementById(id);
-        if (el && el.contains(target)) return;
+      if (!el) return;
+
+      const willOpen = el.classList.contains('hidden');
+
+      if (willOpen) {
+        closePanels(id);
+        el.classList.remove('hidden');
+        const parentCard = el.closest('.checkout-card');
+        if (parentCard) parentCard.classList.add('card-active');
+        document.getElementById('panel-backdrop').classList.add('active');
+      } else {
+        closePanels();
       }
-      if (target.closest('[onclick*="togglePriceOptions"]') ||
-          target.closest('[onclick*="toggleQtyOptions"]') ||
-          target.closest('[onclick*="toggleNameOptions"]') ||
-          target.closest('[onclick*="toggleDeliveryOptions"]') ||
-          target.closest('[onclick*="toggleContainerOptions"]') ||
-          target.closest('[onclick*="toggleQtyInputMode"]')) return;
-      closePanels();
-    });
+      return willOpen;
+    }
+
+    function adjustCheckoutQty(delta) {
+      if (isSpecialOverride) { toast('Quantity is locked while a special is active.'); return; }
+      let newQty = currentQty + delta;
+      if (newQty < 1) newQty = 1;
+      currentQty = newQty;
+      setDisplayedQty(currentQty);
+      updateTotalPreview();
+    }
 
     function updateTotalPreview() {
       const total = isSpecialOverride ? specialFixedTotal : (currentPrice * currentQty);
       document.getElementById('total-price-preview').innerText = money(total);
       updateChange();
     }
-    function setDisplayedQty(q) { document.getElementById('display-qty').innerText = q + (q > 1 ? ' pcs' : ' pc'); }
+    function setDisplayedQty(q) { document.getElementById('display-qty').innerText = q; }
     function setDisplayedPrice(p) { document.getElementById('display-price').innerText = money(p); }
     function syncPresetUI() {
       ['A', 'B', 'C'].forEach(k => {
@@ -1129,8 +1248,9 @@
       if (enable) { closePanels(); d.classList.add('hidden'); dr.classList.remove('hidden'); inp.value = currentQty; inp.focus(); if (typeof inp.select === 'function') inp.select(); }
       else { d.classList.remove('hidden'); dr.classList.add('hidden'); }
     }
-    function selectQty(v) { isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); closePanels(); updateTotalPreview(); }
-    function applyDirectQty(v) { isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); updateTotalPreview(); }
+    function dropSpecial() { if (!isSpecialOverride) return; isSpecialOverride = false; currentSpecialName = ''; currentPrice = appSettings.refUnitPrice; priceTouched = false; setDisplayedPrice(currentPrice); hideActiveMode(); }
+    function selectQty(v) { dropSpecial(); isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); closePanels(); updateTotalPreview(); }
+    function applyDirectQty(v) { dropSpecial(); isSpecialOverride = false; currentQty = toPosInt(v, 1); setDisplayedQty(currentQty); updateTotalPreview(); }
 
     function updateDeliveryDisplay() {
       const el = document.getElementById('display-delivery');
@@ -1152,13 +1272,12 @@
       const c = document.getElementById('rider-buttons'); if (!c) return;
       c.innerHTML = '';
       const makeBtn = (label, key) => {
-        const b = document.createElement('button');
-        b.type = 'button';
+        const b = document.createElement('button'); b.type = 'button';
         b.className = currentRider === key
           ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
           : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
         b.textContent = label;
-        b.onclick = () => { currentRider = key; updateDeliveryDisplay(); renderRiderButtons(); closePanels(); };
+        b.onclick = () => { currentRider = key; updateDeliveryDisplay(); closePanels(); };
         c.appendChild(b);
       };
       makeBtn('No', null);
@@ -1169,8 +1288,7 @@
       const c = document.getElementById('container-type-buttons'); if (!c) return;
       c.innerHTML = '';
       const makeBtn = (label, key) => {
-        const b = document.createElement('button');
-        b.type = 'button';
+        const b = document.createElement('button'); b.type = 'button';
         b.className = currentContainerType === key
           ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
           : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
@@ -1195,8 +1313,7 @@
       const c = document.getElementById('container-status-buttons'); if (!c) return;
       c.innerHTML = '';
       const makeBtn = (label, key) => {
-        const b = document.createElement('button');
-        b.type = 'button';
+        const b = document.createElement('button'); b.type = 'button';
         b.className = currentContainerStatus === key
           ? 'p-2 rounded-xl text-xs font-bold bg-slate-800 text-white'
           : 'p-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100';
@@ -1211,8 +1328,8 @@
         };
         c.appendChild(b);
       };
-      makeBtn('Given', 'given');
-      makeBtn('To be given', 'to_be_given');
+      makeBtn('Bought', 'given');
+      makeBtn('Borrowed', 'to_be_given');
     }
     function applyContainerCount(v) {
       currentContainerCount = Math.max(0, parseInt(v, 10) || 0);
@@ -1258,15 +1375,13 @@
       currentName = name;
       document.getElementById('display-name').innerText = name;
       document.getElementById('name-search-input').value = name;
-      document.getElementById('autocomplete-suggestions').classList.add('hidden');
-      document.getElementById('name-options').classList.add('hidden');
+      closePanels();
     }
     function resetCustomerField() {
       currentName = 'no name';
       document.getElementById('display-name').innerText = 'no name';
       const s = document.getElementById('name-search-input'); if (s) s.value = '';
       document.getElementById('autocomplete-suggestions').classList.add('hidden');
-      document.getElementById('name-options').classList.add('hidden');
     }
     function rememberCustomer(name) {
       const clean = String(name || '').trim();
@@ -1299,70 +1414,50 @@
       } else inp.value = String(value);
       updateChange();
     }
-    function renderTodayStrip() {
-      const today = new Date().toDateString();
+    function paidTodayStats() {
+      const today = localDateStr();
       let count = 0, income = 0;
       transactions.forEach(t => {
-        if (isVoided(t) || statusOf(t) === 'cancelled') return;
-        const d = new Date(t.date);
-        if (d.toDateString() === today) { count++; income += toNum(t.total, 0); }
+        if (isVoided(t) || statusOf(t) !== 'paid') return;
+        const p = paidAt(t);
+        if (p && localDateStr(p) === today) { count++; income += toNum(t.total, 0); }
       });
+      return { count, income };
+    }
+    function renderTodayStrip() {
+      const { count, income } = paidTodayStats();
+      const openCount = transactions.filter(t => !isVoided(t) && !['paid', 'cancelled'].includes(statusOf(t))).length;
       const lastEnd = toNum(appSettings.lastEndDayAt, 0);
       let closedText;
       if (lastEnd === 0) closedText = ' · ⚠️ End Day not run yet';
       else if (localDateStr(lastEnd) !== localDateStr()) closedText = ` · ⚠️ Last closed ${formatDate(lastEnd)}`;
       else closedText = ' · ✅ Closed today';
-      document.getElementById('today-strip').textContent = `Today: ${count} order${count === 1 ? '' : 's'} · ${money(income)}${closedText}`;
+      document.getElementById('today-strip').textContent = `Paid today: ${count} · ${money(income)} · ${openCount} open${closedText}`;
     }
     function renderCheckoutGoalBar() {
       const el = document.getElementById('checkout-goal-bar');
       const goal = Math.max(0, toNum(appSettings.goal, 0));
       if (goal <= 0) { el.classList.add('hidden'); return; }
       el.classList.remove('hidden');
-      const s = boardStats(transactions);
-      const pct = Math.min(100, Math.round((s.income / goal) * 100));
+      const inc = paidTodayStats().income;
+      const pct = Math.min(100, Math.round((inc / goal) * 100));
       document.getElementById('checkout-goal-fill').style.width = pct + '%';
-      document.getElementById('checkout-goal-text').textContent = `${money(s.income)} / ${money(goal)} (${pct}%)`;
+      document.getElementById('checkout-goal-text').textContent = `${money(inc)} paid / ${money(goal)} (${pct}%)`;
     }
     function refreshCheckoutExtras() { renderTodayStrip(); renderCheckoutGoalBar(); updateChange(); renderArchiveInfo(); updateEndDayBadge(); updateEndDayBanner(); }
 
-    /* END DAY BANNER — reminder that End Day hasn't been run today */
     function updateEndDayBanner() {
       const banner = document.getElementById('end-day-banner');
       const textEl = document.getElementById('end-day-banner-text');
       if (!banner || !textEl) return;
-
-      // Reset dismissal across day change
-      if (endDayBannerDismissedOn && endDayBannerDismissedOn !== localDateStr()) {
-        endDayBannerDismissedOn = null;
-      }
-
-      // Hidden if dismissed today
-      if (endDayBannerDismissedOn) {
-        banner.classList.add('hidden'); banner.classList.remove('flex');
-        return;
-      }
-
-      // Hidden if no orders on the board
-      if (transactions.length === 0) {
-        banner.classList.add('hidden'); banner.classList.remove('flex');
-        return;
-      }
-
+      if (endDayBannerDismissedOn && endDayBannerDismissedOn !== localDateStr()) endDayBannerDismissedOn = null;
+      if (endDayBannerDismissedOn || transactions.length === 0) { banner.classList.add('hidden'); banner.classList.remove('flex'); return; }
       const lastEnd = toNum(appSettings.lastEndDayAt, 0);
-      if (lastEnd > 0 && localDateStr(lastEnd) === localDateStr()) {
-        // Already closed out today
-        banner.classList.add('hidden'); banner.classList.remove('flex');
-        return;
-      }
-
+      if (lastEnd > 0 && localDateStr(lastEnd) === localDateStr()) { banner.classList.add('hidden'); banner.classList.remove('flex'); return; }
       let msg;
-      if (lastEnd === 0) {
-        msg = 'End Day has never been run. Close out today so the accounting file exists.';
-      } else {
-        const daysDiff = Math.floor(
-          (new Date(localDateStr()).getTime() - new Date(localDateStr(lastEnd)).getTime()) / 86400000
-        );
+      if (lastEnd === 0) msg = 'End Day has never been run. Close out today so the accounting file exists.';
+      else {
+        const daysDiff = Math.floor((new Date(localDateStr()).getTime() - new Date(localDateStr(lastEnd)).getTime()) / 86400000);
         if (daysDiff === 1) msg = 'End Day was last run yesterday. Close out today.';
         else if (daysDiff > 1) msg = `End Day was last run ${daysDiff} days ago. Close out to avoid gaps in your records.`;
         else msg = 'End Day not run yet today.';
@@ -1370,16 +1465,41 @@
       textEl.textContent = '⚠️ ' + msg;
       banner.classList.remove('hidden'); banner.classList.add('flex');
     }
-    function dismissEndDayBanner() {
-      endDayBannerDismissedOn = localDateStr();
-      updateEndDayBanner();
-    }
+    function dismissEndDayBanner() { endDayBannerDismissedOn = localDateStr(); updateEndDayBanner(); }
 
     function addTransaction() {
+      closePanels();
+
       const total = isSpecialOverride ? specialFixedTotal : currentPrice * currentQty;
       if (!Number.isFinite(total) || total <= 0) { toast('Set a price greater than 0.'); return; }
       if (!Number.isFinite(currentQty) || currentQty < 1) { toast('Quantity must be at least 1.'); return; }
+
+      if (currentRider && !currentContainerType) {
+        openConfirmModal({
+          title: 'No containers tracked',
+          desc: 'This is a delivery but no containers are tracked.\n\nIs this correct?',
+          okLabel: 'Yes, continue',
+          onConfirm: () => doAddTransaction()
+        });
+        return;
+      }
+      if (currentContainerStatus === 'to_be_given' && currentContainerCount > currentQty) {
+        openConfirmModal({
+          title: 'Double check containers',
+          desc: `You are buying ${currentQty} water but noting ${currentContainerCount} containers out.\n\nIs this correct?`,
+          okLabel: 'Yes, continue',
+          onConfirm: () => doAddTransaction()
+        });
+        return;
+      }
+      doAddTransaction();
+    }
+
+    function doAddTransaction() {
+      const total = isSpecialOverride ? specialFixedTotal : currentPrice * currentQty;
       const now = Date.now();
+      const outCount = (currentContainerType && currentContainerStatus === 'to_be_given') ? currentContainerCount : 0;
+
       const tx = {
         id: newId(), date: new Date(now).toISOString(), updatedAt: now,
         customer: currentName || 'no name',
@@ -1392,11 +1512,14 @@
         rider: currentRider,
         container_type: currentContainerType,
         container_status: currentContainerStatus,
-        container_count: currentContainerCount
+        container_count: currentContainerCount,
+        container_out_count: outCount,
+        container_history: []
       };
       transactions.unshift(tx);
       saveTransactions();
       rememberCustomer(tx.customer);
+
       isSpecialOverride = false; priceTouched = false; currentSpecialName = '';
       currentPrice = appSettings.refUnitPrice; currentQty = 1;
       setDisplayedPrice(currentPrice); setDisplayedQty(1); hideActiveMode();
@@ -1408,6 +1531,7 @@
       refreshViews(); resetCustomerField(); refreshCheckoutExtras();
       toast(`Logged: ${tx.qty} pc${tx.qty > 1 ? 's' : ''} · ${money(tx.total)} · ${tx.customer}`);
     }
+
     function refreshViews() {
       if (isBoardViewOpen()) { renderBoardFilters(); renderBoard(); renderBoardStats(); }
       if (isTableViewOpen()) renderTable();
@@ -1426,8 +1550,17 @@
     function filteredBoardTransactions() {
       let list = boardTransactions();
       if (!boardShowVoided) list = list.filter(t => !isVoided(t));
-      if (boardFilter !== 'all') list = list.filter(t => statusOf(t) === boardFilter);
-      if (!boardShowPaid) list = list.filter(t => statusOf(t) !== 'paid');
+      if (boardFilter !== 'all') {
+        list = list.filter(t => statusOf(t) === boardFilter);
+      } else {
+        if (!boardShowPaid) {
+          list = list.filter(t => {
+            if (statusOf(t) === 'paid') return toPosInt(t.container_out_count, 0) > 0;
+            return true;
+          });
+        }
+        if (!boardShowCancelled) list = list.filter(t => statusOf(t) !== 'cancelled');
+      }
       if (boardSearch.trim()) {
         const q = boardSearch.trim().toLowerCase();
         list = list.filter(t => (t.customer || '').toLowerCase().includes(q));
@@ -1501,8 +1634,7 @@
       const current = Math.max(0, toNum(appSettings.goal, 0));
       openPromptModal({
         title: 'Set income goal', desc: 'Progress counts every non-cancelled, non-voided order.',
-        type: 'number', min: '0', step: '0.01',
-        value: current > 0 ? current : '', placeholder: '0.00', okLabel: 'Save',
+        type: 'number', min: '0', step: '0.01', value: current > 0 ? current : '', placeholder: '0.00', okLabel: 'Save',
         onSubmit: (raw) => {
           const v = parseFloat(raw);
           if (!Number.isFinite(v) || v < 0) { toast('Enter a valid amount.'); return false; }
@@ -1513,12 +1645,13 @@
         }
       });
     }
+
     function renderBoardFilters() {
       const c = document.getElementById('board-filters'); if (!c) return;
       c.innerHTML = '';
       const search = document.createElement('input');
       search.type = 'text'; search.placeholder = 'Search name…'; search.value = boardSearch;
-      search.className = 'w-32 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400';
+      search.className = 'w-36 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400';
       search.addEventListener('input', (e) => setBoardSearch(e.target.value));
       c.appendChild(search);
       const chips = [
@@ -1528,43 +1661,53 @@
       ];
       chips.forEach(({ key, label }) => {
         const b = document.createElement('button'); b.type = 'button';
-        b.className = boardFilter === key ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
+        b.className = boardFilter === key ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white shadow-sm' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shadow-sm';
         b.textContent = label; b.addEventListener('click', () => setBoardFilter(key)); c.appendChild(b);
       });
       const paidCount = boardTransactions().filter(t => !isVoided(t) && statusOf(t) === 'paid').length;
       const tD = document.createElement('button'); tD.type = 'button';
-      tD.className = boardShowPaid ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-green-600 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
+      tD.className = boardShowPaid ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-green-600 text-white shadow-sm' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shadow-sm';
       tD.textContent = boardShowPaid ? `Hide paid (${paidCount})` : `Show paid (${paidCount})`;
       tD.addEventListener('click', toggleShowPaid); c.appendChild(tD);
+      const cancelledCount = boardTransactions().filter(t => !isVoided(t) && statusOf(t) === 'cancelled').length;
+      const tC = document.createElement('button'); tC.type = 'button';
+      tC.className = boardShowCancelled ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white shadow-sm' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shadow-sm';
+      tC.textContent = boardShowCancelled ? `Hide cancelled (${cancelledCount})` : `Show cancelled (${cancelledCount})`;
+      tC.addEventListener('click', toggleShowCancelled); c.appendChild(tC);
       const voidedCount = boardTransactions().filter(isVoided).length;
       const tV = document.createElement('button'); tV.type = 'button';
-      tV.className = boardShowVoided ? 'px-2 py-1 rounded-lg text-[10px] font-bold bg-red-600 text-white' : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100';
+      tV.className = boardShowVoided ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white shadow-sm' : 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 shadow-sm';
       tV.textContent = boardShowVoided ? `Hide voided (${voidedCount})` : `Show voided (${voidedCount})`;
       tV.addEventListener('click', toggleShowVoided); c.appendChild(tV);
     }
     function setBoardFilter(f) { boardFilter = f; renderBoardFilters(); renderBoard(); updateSelectAllState(); }
     function setBoardSearch(v) { boardSearch = v; renderBoard(); updateSelectAllState(); }
     function toggleShowPaid() { boardShowPaid = !boardShowPaid; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
+    function toggleShowCancelled() { boardShowCancelled = !boardShowCancelled; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
     function toggleShowVoided() { boardShowVoided = !boardShowVoided; renderBoardFilters(); renderBoard(); updateSelectAllState(); updateBulkBar(); }
 
     function renderBoard() {
       const table = document.getElementById('board-table'); if (!table) return;
       const list = filteredBoardTransactions();
       const cols = appSettings.customColumns || [];
-      const colCount = 6 + cols.length;
+      const colCount = 8 + cols.length;
+
       const head =
-        '<thead class="bg-slate-100 text-slate-600 sticky top-0 z-10"><tr>'
-        + '<th class="px-0.5 py-1.5 text-center border-b border-slate-200 w-6"><input type="checkbox" id="board-select-all" onchange="toggleSelectAll(this.checked)" class="w-3 h-3" aria-label="Select all"></th>'
-        + '<th class="px-0.5 py-1.5 text-center border-b border-slate-200 whitespace-nowrap w-5 text-[9px] font-bold">#</th>'
-        + '<th class="px-1 py-1.5 text-left border-b border-slate-200 whitespace-nowrap">Customer</th>'
-        + '<th class="px-1 py-1.5 text-right border-b border-slate-200 whitespace-nowrap w-10">Qty</th>'
-        + '<th class="px-1 py-1.5 text-right border-b border-slate-200 whitespace-nowrap">Total</th>'
-        + '<th class="px-1 py-1.5 text-left border-b border-slate-200 whitespace-nowrap min-w-[6rem]">Status</th>'
-        + cols.map(col => `<th class="px-1 py-1.5 text-left border-b border-slate-200 whitespace-nowrap min-w-[5rem]"><div class="flex items-center gap-0.5"><span class="truncate max-w-[6rem]">${esc(col.name)}</span><button type="button" onclick="removeCustomColumn('${col.id}')" class="no-print w-4 h-4 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-[9px] font-bold" aria-label="Remove">✕</button></div></th>`).join('')
+        '<thead class="bg-slate-100 text-slate-600 sticky top-0 z-10 border-b-2 border-slate-300"><tr>'
+        + '<th class="px-2 py-3 text-center border-b border-slate-200 w-8"><input type="checkbox" id="board-select-all" onchange="toggleSelectAll(this.checked)" class="w-4 h-4" aria-label="Select all"></th>'
+        + '<th class="px-2 py-3 text-center border-b border-slate-200 whitespace-nowrap w-8 text-xs font-bold text-slate-500">#</th>'
+        + '<th class="px-2 py-3 text-left border-b border-slate-200 whitespace-nowrap text-sm font-bold">Customer</th>'
+        + '<th class="px-2 py-3 text-right border-b border-slate-200 whitespace-nowrap w-12 text-sm font-bold">Qty</th>'
+        + '<th class="px-2 py-3 text-right border-b border-slate-200 whitespace-nowrap text-sm font-bold">Total</th>'
+        + '<th class="px-2 py-3 text-left border-b border-slate-200 whitespace-nowrap text-sm font-bold min-w-[7rem]">Status</th>'
+        + '<th class="px-2 py-3 text-center border-b border-slate-200 whitespace-nowrap text-sm font-bold">Containers</th>'
+        + '<th class="px-2 py-3 text-center border-b border-slate-200 whitespace-nowrap text-sm font-bold w-20">Actions</th>'
+        + cols.map(col => `<th class="px-2 py-3 text-left border-b border-slate-200 whitespace-nowrap text-sm font-bold min-w-[5rem]"><div class="flex items-center gap-1"><span class="truncate max-w-[6rem]">${esc(col.name)}</span><button type="button" onclick="removeCustomColumn('${col.id}')" class="no-print w-5 h-5 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 text-[10px] font-bold" aria-label="Remove">✕</button></div></th>`).join('')
         + '</tr></thead>';
+
       let body;
       if (list.length === 0) {
-        body = `<tbody><tr><td colspan="${colCount}" class="px-3 py-6 text-center text-xs italic text-slate-400">No matching orders.</td></tr></tbody>`;
+        body = `<tbody><tr><td colspan="${colCount}" class="px-3 py-6 text-center text-sm italic text-slate-400">No matching orders.</td></tr></tbody>`;
       } else {
         body = '<tbody>' + list.map((t, i) => {
           const st = statusOf(t);
@@ -1572,38 +1715,60 @@
           const qty = toPosInt(t.qty, 1);
           const isSel = selectedTx.has(String(t.id));
           const voided = isVoided(t);
-          const editedBadge = (t.edits && t.edits.length > 0)
-            ? `<span class="text-[9px] text-amber-600" title="${esc(t.edits.map(e => e.changes).join(' | '))}">✎</span>` : '';
-          const voidedBadge = voided
-            ? `<span class="px-1 py-0 rounded bg-red-100 text-red-700 text-[8px] font-black uppercase">V</span>` : '';
+          const outCount = toPosInt(t.container_out_count, 0);
+
+          const editedBadge = (t.edits && t.edits.length > 0) ? `<span class="text-[10px] text-amber-600" title="${esc(t.edits.map(e => e.changes).join(' | '))}">✎</span>` : '';
+          const voidedBadge = voided ? `<span class="px-1 py-0 rounded bg-red-100 text-red-700 text-[9px] font-black uppercase">V</span>` : '';
+
           const statusCell = voided
-            ? `<div class="flex items-center gap-0.5"><span class="flex-1 text-[10px] font-bold text-red-600 truncate">${esc(formatDate(t.voided_at))}</span><button type="button" onclick="restoreTransaction('${t.id}')" class="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded">↺</button></div>`
-            : `<select onchange="setOrderStatus('${t.id}', this.value)" class="w-full text-[10px] font-bold rounded-md border px-0.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 ${sd.cls}">
+            ? `<div class="flex items-center gap-1"><span class="flex-1 text-xs font-bold text-red-600 truncate">Voided</span><button type="button" onclick="restoreTransaction('${t.id}')" class="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded">↺</button></div>`
+            : `<select onchange="setOrderStatus('${t.id}', this.value)" class="w-full text-sm font-bold rounded-lg border px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${sd.cls}">
                 ${ORDER_STATUSES.map(s => `<option value="${s.key}"${s.key === st ? ' selected' : ''}>${s.label}</option>`).join('')}
               </select>`;
+
           const customCells = cols.map(col => {
             const val = (t.custom && t.custom[col.id]) || '';
-            return `<td class="px-0.5 py-0.5 border-b border-slate-100"><input type="text" value="${esc(val)}" onchange="updateTxCustom('${t.id}', '${col.id}', this.value)" ${voided ? 'disabled' : ''} class="w-full min-w-[5rem] bg-transparent border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded px-1 py-0.5 text-[10px] text-slate-800 focus:outline-none disabled:opacity-50"></td>`;
+            return `<td class="px-2 py-3 border-b border-slate-100"><input type="text" value="${esc(val)}" onchange="updateTxCustom('${t.id}', '${col.id}', this.value)" ${voided ? 'disabled' : ''} class="w-full min-w-[5rem] bg-transparent border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded px-1 py-1 text-sm text-slate-800 focus:outline-none disabled:opacity-50"></td>`;
           }).join('');
-          const riderBadge = t.rider ? `<span class="text-[9px] text-blue-600 font-bold">🚚 ${esc(riderLabel(t.rider))}</span>` : '';
-          const containerBadge = t.container_type ? `<span class="text-[9px] text-slate-600">📦 ${t.container_count > 0 ? t.container_count + '× ' : ''}${esc(containerTypeLabel(t.container_type))}${t.container_status ? ' (' + containerStatusLabel(t.container_status).toLowerCase() + ')' : ''}</span>` : '';
-          const subtitle = (riderBadge || containerBadge) ? `<div class="flex items-center gap-1 mt-0.5 flex-wrap">${riderBadge}${containerBadge}</div>` : '';
-          return `<tr class="hover:bg-emerald-50/40 ${voided ? 'opacity-60 bg-red-50/30' : (st === 'cancelled' ? 'opacity-60' : '')} ${isSel ? 'bg-emerald-50' : ''}">
-            <td class="px-0.5 py-1 border-b border-slate-100 text-center"><input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleSelect('${t.id}', this.checked)" class="w-3 h-3"></td>
-            <td class="px-0.5 py-1 border-b border-slate-100 text-center text-slate-400 font-bold text-[9px]">${i + 1}</td>
-            <td class="px-1 py-1 border-b border-slate-100 font-semibold text-slate-800 text-[11px]">
-              <div class="flex items-center gap-0.5">
-                <span class="truncate max-w-[8rem]" title="${esc(t.customer || 'no name')}">${esc(t.customer || 'no name')}</span>
+
+          const riderBadge = t.rider ? `<span class="text-[10px] text-blue-600 font-bold">🚚 ${esc(riderLabel(t.rider))}</span>` : '';
+
+          let containerCell = '';
+          if (t.container_type) {
+            if (outCount > 0) {
+              containerCell = `<button type="button" onclick="openReturnModal('${t.id}')" class="bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded-lg border border-amber-300 shadow-sm hover:bg-amber-200 transition whitespace-nowrap">📦 ${outCount}× ${esc(containerTypeLabel(t.container_type))}</button>`;
+            } else {
+              containerCell = `<span class="text-xs text-slate-400">✅ 0 Out</span>`;
+            }
+          } else {
+            containerCell = `<span class="text-slate-300">—</span>`;
+          }
+
+          const subtitle = riderBadge ? `<div class="flex items-center gap-1 mt-1 flex-wrap">${riderBadge}</div>` : '';
+
+          return `<tr class="hover:bg-emerald-50/40 ${voided ? 'opacity-60 bg-red-50/30' : (st === 'cancelled' ? 'opacity-60 bg-amber-50/30' : '')} ${isSel ? 'bg-emerald-50' : ''}">
+            <td class="px-2 py-3 border-b border-slate-100 text-center"><input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleSelect('${t.id}', this.checked)" class="w-4 h-4"></td>
+            <td class="px-2 py-3 border-b border-slate-100 text-center text-slate-400 font-bold text-xs">${i + 1}</td>
+            <td class="px-2 py-3 border-b border-slate-100 font-semibold text-slate-800 text-sm">
+              <div class="flex items-center gap-1">
+                <span class="truncate max-w-[9rem]" title="${esc(t.customer || 'no name')}">${esc(t.customer || 'no name')}</span>
                 ${editedBadge}${voidedBadge}
               </div>
               ${subtitle}
             </td>
-            <td class="px-1 py-1 border-b border-slate-100 text-right font-semibold text-slate-700 text-[11px] whitespace-nowrap">${qty}</td>
-            <td class="px-1 py-1 border-b border-slate-100 text-right">
-              <div class="font-black text-emerald-700 text-[11px] whitespace-nowrap">${money(toNum(t.total, 0))}</div>
-              <div class="text-[9px] text-slate-400 whitespace-nowrap">${t.isSpecial ? `<span class="text-purple-600 font-bold">★ ${esc(t.special_name || 'special')}</span>` : `${moneyShort(toNum(t.price, 0))} ea`}</div>
+            <td class="px-2 py-3 border-b border-slate-100 text-right font-semibold text-slate-700 text-sm whitespace-nowrap">${qty}</td>
+            <td class="px-2 py-3 border-b border-slate-100 text-right">
+              <div class="font-black text-emerald-700 text-sm whitespace-nowrap">${money(toNum(t.total, 0))}</div>
+              <div class="text-[10px] text-slate-400 whitespace-nowrap">${t.isSpecial ? `<span class="text-purple-600 font-bold">★ ${esc(t.special_name || 'special')}</span>` : `${moneyShort(toNum(t.price, 0))} ea`}</div>
             </td>
-            <td class="px-1 py-1 border-b border-slate-100">${statusCell}</td>
+            <td class="px-2 py-3 border-b border-slate-100">${statusCell}</td>
+            <td class="px-2 py-3 border-b border-slate-100 text-center">${containerCell}</td>
+            <td class="px-2 py-3 border-b border-slate-100 text-center">
+              <div class="flex gap-1 justify-center">
+                <button type="button" onclick="editOrder('${t.id}')" class="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Edit">✏️</button>
+                <button type="button" onclick="deleteTransaction('${t.id}')" class="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100" title="Void (mistake)">✕</button>
+              </div>
+            </td>
             ${customCells}
           </tr>`;
         }).join('') + '</tbody>';
@@ -1647,6 +1812,16 @@
       if (statusOf(tx) === next) return;
 
       if (next === 'paid') { showPaidConfirmPopup(tx); return; }
+      if (statusOf(tx) === 'paid') {
+        openConfirmModal({
+          title: 'Un-pay this order?',
+          desc: `"${tx.customer}" · ${money(tx.total)} will be removed from Sales and revenue.\n\nOnly do this if it was marked Paid by mistake.`,
+          okLabel: 'Yes, change status',
+          onConfirm: () => { tx.edits = tx.edits || []; tx.edits.push({ at: new Date().toISOString(), changes: `status: paid → ${next}` }); applyStatus(tx, next); },
+          onCancel: () => renderBoard()
+        });
+        return;
+      }
       if (next === 'cancelled') {
         openConfirmModal({
           title: 'Mark as Cancelled?',
@@ -1671,11 +1846,8 @@
       if (rider) lines.push(`Delivered by: ${rider}`);
       lines.push(`Paid: ${formatDate(new Date().toISOString(), true)}`);
       lines.push('');
-      if (tx.isSpecial) {
-        lines.push(`Special: ${tx.special_name || 'special'}`);
-      } else {
-        lines.push(`${toPosInt(tx.qty, 1)} × ${money(toNum(tx.price, 0))} = ${total}`);
-      }
+      if (tx.isSpecial) lines.push(`Special: ${tx.special_name || 'special'}`);
+      else lines.push(`${toPosInt(tx.qty, 1)} × ${money(toNum(tx.price, 0))} = ${total}`);
       lines.push('');
       lines.push('This order will be added to the Sales Table. Make sure payment has been received.');
       openConfirmModal({
@@ -1707,21 +1879,14 @@
         const total = targets.reduce((s, t) => s + toNum(t.total, 0), 0);
         openConfirmModal({
           title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Paid?`,
-          desc: `Total: ${money(total)}\n\n` +
-                `These ${targets.length} orders will be added to the Sales Table.\n\n` +
-                `Make sure payments have been received for all of them.`,
+          desc: `Total: ${money(total)}\n\nThese ${targets.length} orders will be added to the Sales Table.\n\nMake sure payments have been received for all of them.`,
           okLabel: 'Yes, mark all paid',
           onConfirm: apply
         });
         return;
       }
       if (nextStatus === 'cancelled') {
-        openConfirmModal({
-          title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Cancelled?`,
-          desc: 'They will be excluded from revenue.',
-          okLabel: 'Yes, cancel all',
-          onConfirm: apply
-        });
+        openConfirmModal({ title: `Mark ${targets.length} order${targets.length === 1 ? '' : 's'} as Cancelled?`, desc: 'They will be excluded from revenue.', okLabel: 'Yes, cancel all', onConfirm: apply });
         return;
       }
       apply();
@@ -1757,8 +1922,7 @@
       const col = (appSettings.customColumns || []).find(c => c.id === colId);
       if (!col) return;
       confirmDelete({
-        title: 'Delete column?',
-        item: `"${col.name}"`,
+        title: 'Delete column?', item: `"${col.name}"`,
         instruction: 'The column and all its values will be removed from every order. This cannot be undone.',
         okLabel: 'Delete column',
         onConfirm: () => {
@@ -1770,6 +1934,176 @@
           toast(`Column "${col.name}" deleted.`);
         }
       });
+    }
+
+    /* CONTAINER RETURN */
+    function openReturnModal(id) {
+      const tx = transactions.find(t => String(t.id) === String(id));
+      if (!tx) return;
+      returningTxId = id;
+      const outCount = toPosInt(tx.container_out_count, 0);
+      if (outCount === 0) { toast('No containers currently out.'); return; }
+      document.getElementById('return-customer-name').textContent = tx.customer || 'no name';
+      document.getElementById('return-current-out').textContent = outCount;
+      document.getElementById('return-container-type').textContent = containerTypeLabel(tx.container_type);
+      const input = document.getElementById('return-qty-input');
+      input.value = 1; input.max = outCount;
+      document.getElementById('return-container-modal').classList.remove('hidden');
+      document.getElementById('return-container-modal').classList.add('flex');
+    }
+    function closeReturnModal() {
+      document.getElementById('return-container-modal').classList.add('hidden');
+      document.getElementById('return-container-modal').classList.remove('flex');
+      returningTxId = null;
+    }
+    function adjustReturnCount(delta) {
+      const input = document.getElementById('return-qty-input');
+      const tx = transactions.find(t => String(t.id) === String(returningTxId));
+      const max = tx ? toPosInt(tx.container_out_count, 1) : 1;
+      let val = parseInt(input.value, 10) || 1;
+      val += delta;
+      if (val < 1) val = 1;
+      if (val > max) val = max;
+      input.value = val;
+    }
+    function validateReturnInput() {
+      const input = document.getElementById('return-qty-input');
+      const tx = transactions.find(t => String(t.id) === String(returningTxId));
+      const max = tx ? toPosInt(tx.container_out_count, 1) : 1;
+      let val = parseInt(input.value, 10);
+      if (!Number.isFinite(val) || val < 1) val = 1;
+      if (val > max) val = max;
+      input.value = val;
+    }
+    function returnAllContainers() {
+      const tx = transactions.find(t => String(t.id) === String(returningTxId));
+      if (!tx) return;
+      document.getElementById('return-qty-input').value = toPosInt(tx.container_out_count, 1);
+    }
+    function submitContainerReturn() {
+      const tx = transactions.find(t => String(t.id) === String(returningTxId));
+      if (!tx) return;
+      const returnQty = toPosInt(document.getElementById('return-qty-input').value, 1);
+      const currentOut = toPosInt(tx.container_out_count, 0);
+      if (returnQty > currentOut) return;
+      tx.container_out_count = currentOut - returnQty;
+      tx.container_history = tx.container_history || [];
+      tx.container_history.push({ returned: returnQty, at: new Date().toISOString() });
+      touchTx(tx);
+      saveTransactions();
+      refreshViews();
+      closeReturnModal();
+      toast(`Returned ${returnQty} container${returnQty > 1 ? 's' : ''}. ${tx.container_out_count} remaining.`);
+    }
+
+    /* EDIT ORDER */
+    function editOrder(id) {
+      const tx = transactions.find(t => String(t.id) === String(id));
+      if (!tx) return;
+      editingTxId = id;
+
+      document.getElementById('edit-customer').value = tx.customer || 'no name';
+
+      const specSelect = document.getElementById('edit-special');
+      specSelect.innerHTML = '<option value="">None (Custom Order)</option>';
+      Object.keys(presetsConfig.specials).forEach(k => {
+        const sp = presetsConfig.specials[k];
+        specSelect.innerHTML += `<option value="${k}">${esc(sp.name)}</option>`;
+      });
+      let specVal = '';
+      if (tx.isSpecial && tx.special_name) {
+        const match = Object.keys(presetsConfig.specials).find(k => presetsConfig.specials[k].name === tx.special_name);
+        if (match) specVal = match;
+      }
+      specSelect.value = specVal;
+
+      document.getElementById('edit-qty').value = tx.qty;
+      document.getElementById('edit-price').value = tx.price;
+      document.getElementById('edit-total').value = tx.total;
+
+      const typeSelect = document.getElementById('edit-container-type');
+      typeSelect.innerHTML = '<option value="">None</option>';
+      Object.keys(appSettings.containerTypes).forEach(k => {
+        typeSelect.innerHTML += `<option value="${k}">${esc(appSettings.containerTypes[k].label)}</option>`;
+      });
+      typeSelect.value = tx.container_type || '';
+      document.getElementById('edit-container-status').value = tx.container_status || '';
+      document.getElementById('edit-container-out').value = toPosInt(tx.container_out_count, 0);
+
+      document.getElementById('edit-warning').classList.toggle('hidden', statusOf(tx) !== 'paid');
+      document.getElementById('edit-order-modal').classList.remove('hidden');
+      document.getElementById('edit-order-modal').classList.add('flex');
+    }
+    function closeEditOrderModal() {
+      document.getElementById('edit-order-modal').classList.add('hidden');
+      document.getElementById('edit-order-modal').classList.remove('flex');
+      editingTxId = null;
+    }
+    function handleEditSpecialChange() {
+      const val = document.getElementById('edit-special').value;
+      if (val) {
+        const sp = presetsConfig.specials[val];
+        if (sp) {
+          document.getElementById('edit-qty').value = sp.qty;
+          document.getElementById('edit-total').value = sp.total;
+          document.getElementById('edit-price').value = round2(sp.total / sp.qty).toFixed(2);
+        }
+      }
+    }
+    function syncEditForm(changedField) {
+      if (!editingTxId) return;
+      const qty = toPosInt(document.getElementById('edit-qty').value, 1);
+      let price = parseFloat(document.getElementById('edit-price').value) || 0;
+      let total = parseFloat(document.getElementById('edit-total').value) || 0;
+      if (changedField === 'qty' || changedField === 'total' || changedField === 'price') {
+        document.getElementById('edit-special').value = '';
+      }
+      if (changedField === 'qty' || changedField === 'price') {
+        document.getElementById('edit-total').value = round2(qty * price).toFixed(2);
+      } else if (changedField === 'total') {
+        if (qty > 0) document.getElementById('edit-price').value = round2(total / qty).toFixed(2);
+      }
+    }
+    function saveEditOrder() {
+      if (!editingTxId) return;
+      const tx = transactions.find(t => String(t.id) === String(editingTxId));
+      if (!tx) return;
+
+      const newCustomer = document.getElementById('edit-customer').value.trim() || 'no name';
+      const newQty = toPosInt(document.getElementById('edit-qty').value, 1);
+      const newTotal = Math.max(0, toNum(document.getElementById('edit-total').value, 0));
+      const specVal = document.getElementById('edit-special').value;
+      const newCType = document.getElementById('edit-container-type').value || null;
+      const newCStatus = document.getElementById('edit-container-status').value || null;
+      const newCOut = toPosInt(document.getElementById('edit-container-out').value, 0);
+
+      const _before = { customer: tx.customer, qty: tx.qty, total: tx.total, ctype: tx.container_type, cout: tx.container_out_count };
+      tx.customer = newCustomer;
+      tx.qty = newQty;
+      tx.total = newTotal;
+      tx.price = tx.qty > 0 ? round2(tx.total / tx.qty) : 0;
+      if (specVal) { tx.isSpecial = true; tx.special_name = presetsConfig.specials[specVal].name; }
+      else { tx.isSpecial = false; tx.special_name = null; }
+
+      tx.container_type = newCType;
+      tx.container_status = newCStatus;
+      tx.container_out_count = newCType ? newCOut : 0;
+      if (!newCType) { tx.container_status = null; tx.container_out_count = 0; }
+      else if (newCStatus === 'given') { tx.container_out_count = 0; }
+      if (tx.container_type && tx.container_out_count > toPosInt(tx.container_count, 0)) tx.container_count = tx.container_out_count;
+      if (statusOf(tx) === 'paid') {
+        const d = [];
+        if (_before.customer !== tx.customer) d.push(`name: "${_before.customer}" → "${tx.customer}"`);
+        if (_before.qty !== tx.qty) d.push(`qty: ${_before.qty} → ${tx.qty}`);
+        if (_before.total !== tx.total) d.push(`total: ${money(_before.total)} → ${money(tx.total)}`);
+        if (_before.ctype !== tx.container_type || _before.cout !== tx.container_out_count) d.push(`containers: ${_before.cout} out → ${tx.container_out_count} out`);
+        if (d.length) { tx.edits = tx.edits || []; tx.edits.push({ at: new Date().toISOString(), changes: d.join('; ') }); }
+      }
+      touchTx(tx);
+      saveTransactions();
+      refreshViews(); refreshCheckoutExtras();
+      closeEditOrderModal();
+      toast('Order updated.');
     }
 
     function isTableViewOpen() { const el = document.getElementById('table-view'); return !!el && el.classList.contains('open'); }
@@ -1842,7 +2176,12 @@
         case 'minutesToDeliver': { const m = minutesToDeliver(t); return `<td class="px-2 py-1.5 border-b border-slate-100 text-slate-500 whitespace-nowrap text-right">${m == null ? '<span class="text-slate-300">—</span>' : m + ' min'}</td>`; }
         case 'actions': {
           const locked = isRowLocked(t);
-          return `<td class="px-2 py-1.5 border-b border-slate-100 text-center no-print"><button type="button" onclick="deleteTransaction('${t.id}')" title="${locked ? 'Export first' : 'Void this order'}" class="w-6 h-6 inline-flex items-center justify-center rounded-lg font-bold ${locked ? 'text-slate-300 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}">${locked ? '🔒' : '✕'}</button></td>`;
+          return `<td class="px-2 py-1.5 border-b border-slate-100 text-center no-print">
+            <div class="flex gap-1 justify-center">
+              <button type="button" onclick="editOrder('${t.id}')" title="Edit order" class="w-6 h-6 inline-flex items-center justify-center rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50">✏️</button>
+              <button type="button" onclick="deleteTransaction('${t.id}')" title="${locked ? 'Export first' : 'Void this order'}" class="w-6 h-6 inline-flex items-center justify-center rounded-lg font-bold ${locked ? 'text-slate-300 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}">${locked ? '🔒' : '✕'}</button>
+            </div>
+          </td>`;
         }
         default: return `<td class="px-2 py-1.5 border-b border-slate-100"></td>`;
       }
@@ -1880,7 +2219,7 @@
       if (field === 'price') {
         const price = Math.max(0, value); tx.price = price;
         if (special && price > 0) { const qty = Math.max(1, Math.round(fixedTotal / price)); tx.qty = qty; tx.price = round2(fixedTotal / qty); }
-        else if (!special) { tx.total = round2(price * tx.qty); }
+        else if (!special) tx.total = round2(price * tx.qty);
       } else if (field === 'qty') {
         const qty = Math.max(1, Math.round(value)); tx.qty = qty;
         if (special) tx.price = round2(fixedTotal / qty);
@@ -1904,9 +2243,8 @@
         return;
       }
       confirmDelete({
-        title: 'Void this order?',
-        item: `"${tx.customer}" — ${money(tx.total)}`,
-        instruction: 'The order will be marked voided. It stays in exports for audit but is excluded from revenue.',
+        title: 'Void this order?', item: `"${tx.customer}" — ${money(tx.total)}`,
+        instruction: 'If this order was a mistake, void it. It will be removed from the board and calculations but kept in records.',
         okLabel: 'Void order',
         onConfirm: () => {
           const prevVoided = tx.voided_at;
@@ -1919,7 +2257,7 @@
             label: 'Undo',
             onClick: () => {
               tx.voided_at = prevVoided;
-              tx.updatedAt = prevUpdatedAt;
+              touchTx(tx); // must be NEWER than the voided version, or accounting import ignores the undo
               saveTransactions();
               refreshViews(); refreshCheckoutExtras();
               toast('Restored.');
@@ -1937,6 +2275,79 @@
       refreshViews(); refreshCheckoutExtras();
       toast('Order restored.');
     }
+
+    /* STATS */
+    function openStatsModal() {
+      const modal = document.getElementById('stats-modal');
+      const content = document.getElementById('stats-content');
+      if (!modal || !content) return;
+
+      const allTx = transactions.filter(t => !isVoided(t));
+
+      const riderTimes = {};
+      allTx.forEach(t => {
+        if (!t.rider) return;
+        const start = new Date(t.date).getTime();
+        const del = deliveredAt(t);
+        if (!del) return;
+        const end = new Date(del).getTime();
+        if (isNaN(start) || isNaN(end) || end < start) return;
+        const mins = (end - start) / 60000;
+        if (!riderTimes[t.rider]) riderTimes[t.rider] = { total: 0, count: 0 };
+        riderTimes[t.rider].total += mins;
+        riderTimes[t.rider].count += 1;
+      });
+
+      let riderHtml = '';
+      Object.keys(riderTimes).forEach(rKey => {
+        const r = riderTimes[rKey];
+        const avg = Math.round(r.total / r.count);
+        riderHtml += `<div class="flex justify-between border-b border-slate-100 py-1.5 text-sm"><span class="font-semibold">${esc(riderLabel(rKey))}</span><span class="font-bold text-blue-700">~${avg} mins <span class="text-xs text-slate-400 font-normal">(${r.count} orders)</span></span></div>`;
+      });
+      if (!riderHtml) riderHtml = '<p class="text-xs text-slate-400 italic">No delivery data yet.</p>';
+
+      const custDates = {};
+      allTx.forEach(t => {
+        if (!t.customer || t.customer === 'no name') return;
+        if (!custDates[t.customer]) custDates[t.customer] = [];
+        custDates[t.customer].push(new Date(t.date).getTime());
+      });
+
+      let customerHtml = '';
+      let globalIntervals = 0, globalCount = 0;
+      Object.keys(custDates).forEach(cName => {
+        const dates = custDates[cName].sort((a,b) => a - b);
+        if (dates.length < 2) return;
+        let localIntervals = 0;
+        for (let i = 1; i < dates.length; i++) localIntervals += (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
+        const avgDays = Math.round(localIntervals / (dates.length - 1));
+        globalIntervals += localIntervals; globalCount += (dates.length - 1);
+        customerHtml += `<div class="flex justify-between border-b border-slate-100 py-1.5 text-sm"><span class="font-semibold truncate max-w-[60%]">${esc(cName)}</span><span class="font-bold text-emerald-700">~${avgDays} days</span></div>`;
+      });
+      if (!customerHtml) customerHtml = '<p class="text-xs text-slate-400 italic">Need more repeat customers.</p>';
+      const globalAvg = globalCount > 0 ? Math.round(globalIntervals / globalCount) : 0;
+
+      content.innerHTML = `
+        <div class="bg-blue-50 rounded-xl p-3 border border-blue-100">
+          <h4 class="font-bold text-blue-800 text-sm mb-2">🛵 Rider Avg. Delivery Time</h4>
+          ${riderHtml}
+          <div class="mt-3 bg-white rounded-lg p-2 text-[10px] text-slate-400 border border-slate-200">💡 Future: distance (km) tracking for speed analysis.</div>
+        </div>
+        <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+          <h4 class="font-bold text-emerald-800 text-sm mb-2">📅 Customer Reorder Interval</h4>
+          <div class="mb-2 text-xs font-bold text-emerald-700">Overall Average: ${globalAvg} days</div>
+          ${customerHtml}
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+    function closeStatsModal() {
+      const modal = document.getElementById('stats-modal');
+      if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    }
+
     let dragColKey = null;
     function onHeaderDragStart(e, key) { dragColKey = key; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); } catch (_) {} }
     function onHeaderDrop(e, targetKey) {
@@ -1982,12 +2393,23 @@
       renderTierEditorRows(appSettings.tiers.map(t => ({ ...t })));
       renderQtyPresetEditorRows([...appSettings.qtyPresets]);
       renderCustomerEditorRows([...savedCustomers]);
-      document.getElementById('cfg-ref-price').value = appSettings.refUnitPrice;
-      const cashEl = document.getElementById('cfg-show-cash'); if (cashEl) cashEl.checked = !!appSettings.showCash;
-      const rA = document.getElementById('cfg-rider-a'); if (rA && document.activeElement !== rA) rA.value = (appSettings.riders.rider_a || {}).label || 'Rider A';
-      const rB = document.getElementById('cfg-rider-b'); if (rB && document.activeElement !== rB) rB.value = (appSettings.riders.rider_b || {}).label || 'Rider B';
-      const cB = document.getElementById('cfg-container-bilog'); if (cB && document.activeElement !== cB) cB.value = (appSettings.containerTypes.bilog || {}).label || 'Bilog';
-      const cF = document.getElementById('cfg-container-faucet'); if (cF && document.activeElement !== cF) cF.value = (appSettings.containerTypes.faucet || {}).label || 'Faucet';
+
+      const refEl = document.getElementById('cfg-ref-price');
+      if (refEl) refEl.value = appSettings.refUnitPrice;
+
+      const cashEl = document.getElementById('cfg-show-cash');
+      if (cashEl) cashEl.checked = !!appSettings.showCash;
+
+      const rA = document.getElementById('cfg-rider-a');
+      if (rA && document.activeElement !== rA) rA.value = (appSettings.riders.rider_a || {}).label || 'Rider A';
+      const rB = document.getElementById('cfg-rider-b');
+      if (rB && document.activeElement !== rB) rB.value = (appSettings.riders.rider_b || {}).label || 'Rider B';
+
+      const cB = document.getElementById('cfg-container-bilog');
+      if (cB && document.activeElement !== cB) cB.value = (appSettings.containerTypes.bilog || {}).label || 'Bilog';
+      const cF = document.getElementById('cfg-container-faucet');
+      if (cF && document.activeElement !== cF) cF.value = (appSettings.containerTypes.faucet || {}).label || 'Faucet';
+
       updateTextScaleButtons();
     }
     function readTierEditorRows() {
@@ -2017,16 +2439,14 @@
       const current = readTierEditorRows();
       const tier = current[i] || { name: 'this tier', price: 0 };
       confirmDelete({
-        title: 'Delete price tier?',
-        item: `"${tier.name}" — ${money(tier.price)}`,
+        title: 'Delete price tier?', item: `"${tier.name}" — ${money(tier.price)}`,
         instruction: 'This tier will be removed from the checkout price selector. It does not affect existing orders.',
         okLabel: 'Delete tier',
         onConfirm: () => {
           const rows = readTierEditorRows();
           rows.splice(i, 1);
           if (rows.length === 0) rows.push({ name: 'Tier 1', price: 0 });
-          appSettings.tiers = rows;
-          saveJSON(KEY_SETTINGS, appSettings);
+          appSettings.tiers = rows; saveJSON(KEY_SETTINGS, appSettings);
           renderTierEditorRows(rows); renderTierButtons();
           toast('Tier deleted.');
         }
@@ -2057,16 +2477,14 @@
       const current = readQtyPresetEditorRows();
       const val = current[i] || 'this preset';
       confirmDelete({
-        title: 'Delete quantity preset?',
-        item: `"${val} pc"`,
+        title: 'Delete quantity preset?', item: `"${val} pc"`,
         instruction: 'This quick-pick quantity button will be removed from the checkout screen.',
         okLabel: 'Delete preset',
         onConfirm: () => {
           const rows = readQtyPresetEditorRows();
           rows.splice(i, 1);
           if (rows.length === 0) rows.push(1);
-          appSettings.qtyPresets = rows;
-          saveJSON(KEY_SETTINGS, appSettings);
+          appSettings.qtyPresets = rows; saveJSON(KEY_SETTINGS, appSettings);
           renderQtyPresetEditorRows(rows); renderQtyPresetButtons();
           toast('Quantity preset deleted.');
         }
@@ -2100,8 +2518,7 @@
       const current = readCustomerEditorRows();
       const name = current[i] || 'this customer';
       confirmDelete({
-        title: 'Delete customer?',
-        item: `"${name}"`,
+        title: 'Delete customer?', item: `"${name}"`,
         instruction: 'This customer will be removed from the saved list. It does not affect existing orders.',
         okLabel: 'Delete customer',
         onConfirm: () => {
@@ -2151,6 +2568,7 @@
       const rB = document.getElementById('cfg-rider-b');
       if (rA) appSettings.riders.rider_a = { label: (rA.value || '').trim() || 'Rider A' };
       if (rB) appSettings.riders.rider_b = { label: (rB.value || '').trim() || 'Rider B' };
+
       const cB = document.getElementById('cfg-container-bilog');
       const cF = document.getElementById('cfg-container-faucet');
       if (cB) appSettings.containerTypes.bilog = { label: (cB.value || '').trim() || 'Bilog' };
@@ -2179,6 +2597,7 @@
       }
       const cashEl = document.getElementById('cfg-show-cash');
       if (cashEl) appSettings.showCash = !!cashEl.checked;
+
       appSettings.currency = '₱';
 
       saveJSON(KEY_PRESETS, presetsConfig);
@@ -2199,22 +2618,18 @@
     function toggleSidebar(open) {
       const s = document.getElementById('sidebar');
       s.classList.toggle('hidden', !open);
-      if (open) {
-        renderAllSettingsEditors();
-        syncPresetUI();
-        renderArchiveInfo();
-        updateEndDayBadge();
-      } else {
-        closePanels();
-      }
+      if (open) { renderAllSettingsEditors(); syncPresetUI(); renderArchiveInfo(); updateEndDayBadge(); }
+      else { closePanels(); }
     }
 
     function applyTextScale() {
       const root = document.documentElement;
       const mode = appSettings.textScale || 'auto';
+      root.classList.remove('text-scale-xl');
       if (mode === 'small') root.style.fontSize = '14px';
       else if (mode === 'medium') root.style.fontSize = '16px';
       else if (mode === 'large') root.style.fontSize = '18px';
+      else if (mode === 'xl') { root.style.fontSize = '22px'; root.classList.add('text-scale-xl'); }
       else root.style.fontSize = '';
     }
     function updateTextScaleButtons() {
@@ -2227,7 +2642,7 @@
       });
     }
     function setTextScale(mode) {
-      const valid = ['auto', 'small', 'medium', 'large'];
+      const valid = ['auto', 'small', 'medium', 'large', 'xl'];
       appSettings.textScale = valid.includes(mode) ? mode : 'auto';
       saveJSON(KEY_SETTINGS, appSettings);
       applyTextScale();
@@ -2247,16 +2662,15 @@
         badge.classList.remove('hidden');
         badge.textContent = 'closed';
         badge.className = 'px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-bold rounded-full';
-      } else {
-        badge.classList.add('hidden');
-      }
+      } else { badge.classList.add('hidden'); }
     }
     function endDay() {
       if (transactions.length === 0) { toast('No orders to close out.'); return; }
-      const terminal = [];
-      const open = [];
+      const terminal = [], open = [];
       transactions.forEach(t => {
-        if (isVoided(t) || statusOf(t) === 'paid' || statusOf(t) === 'cancelled') terminal.push(t);
+        const containersOut = !isVoided(t) && toPosInt(t.container_out_count, 0) > 0 && t.container_status !== 'given';
+        if (containersOut) open.push(t);   // owed containers stay on the board until returned
+        else if (isVoided(t) || statusOf(t) === 'paid' || statusOf(t) === 'cancelled') terminal.push(t);
         else open.push(t);
       });
       const paidCount = terminal.filter(t => statusOf(t) === 'paid' && !isVoided(t)).length;
@@ -2268,12 +2682,8 @@
       let desc = `Paid: ${paidCount}\nCancelled: ${cancelledCount}\nVoided: ${voidedCount}\nOpen (not paid): ${open.length}\nRevenue: ${money(revenue)}\n\n`;
       if (open.length > 0) desc += `⚠️ ${open.length} order${open.length > 1 ? 's' : ''} still open. ${open.length === 1 ? 'It' : 'They'} will stay on the board for tomorrow.\n\n`;
       if (unexported > 0) desc += `ℹ️ ${unexported} change${unexported > 1 ? 's' : ''} since the last export. A final export will be created now.`;
-      openConfirmModal({
-        title: `End Day · ${localDateDisplay()}`,
-        desc,
-        okLabel: 'Continue',
-        onConfirm: () => confirmEndDayStep2(terminal, open)
-      });
+      openConfirmModal({ title: `End Day · ${localDateDisplay()}`, desc, okLabel: 'Continue',
+        onConfirm: () => confirmEndDayStep2(terminal, open) });
     }
     function confirmEndDayStep2(terminal, open) {
       const paid = terminal.filter(t => statusOf(t) === 'paid' && !isVoided(t));
@@ -2290,18 +2700,19 @@
       });
     }
     function performEndDay(terminal, open) {
+      takeSnapshot('before-end-day');
       const ok = exportFinalDay();
       if (!ok) return;
       const archive = loadJSON(KEY_ARCHIVE, []);
       const archiveList = Array.isArray(archive) ? archive : [];
       const todayIso = localDateStr();
-      terminal.forEach(t => {
-        archiveList.unshift({ ...t, archived_at: new Date().toISOString(), archived_on: todayIso });
-      });
+      const termIds = new Set(terminal.map(t => String(t.id)));
+      for (let i = archiveList.length - 1; i >= 0; i--) if (termIds.has(String(archiveList[i].id))) archiveList.splice(i, 1);
+      terminal.forEach(t => archiveList.unshift({ ...t, archived_at: new Date().toISOString(), archived_on: todayIso }));
       saveJSON(KEY_ARCHIVE, archiveList);
       transactions = open.slice();
       saveTransactions();
-      boardShowVoided = false; boardShowPaid = false; selectedTx.clear();
+      boardShowVoided = false; boardShowPaid = false; boardShowCancelled = false; selectedTx.clear();
       appSettings.lastEndDayAt = Date.now();
       saveJSON(KEY_SETTINGS, appSettings);
       endDayBannerDismissedOn = null;
@@ -2313,20 +2724,16 @@
       if (transactions.length === 0) { toast('Nothing to export.'); return false; }
       const covered = coveredDates(transactions);
       const closedOn = localDateStr();
-      const datePart = covered.length === 0 ? closedOn : covered.length === 1 ? covered[0] : `${covered[0]}_to_${covered[covered.length - 1]}`;
+      const again = toNum(appSettings.lastEndDayAt, 0) > 0 && localDateStr(appSettings.lastEndDayAt) === closedOn;
+      const hhmm = new Date().toTimeString().slice(0, 5).replace(':', '');
+      const datePart = again ? `${closedOn}_${hhmm}` : closedOn;
       const payload = {
-        schema_version: SCHEMA_VERSION,
-        export_type: 'orders',
-        export_mode: 'incremental',
-        include_archive: false,
+        schema_version: SCHEMA_VERSION, export_type: 'orders',
+        export_mode: 'incremental', include_archive: false,
         exported_at: new Date().toISOString(),
-        is_final: true,
-        closed_on: closedOn,
-        covered_dates: covered,
+        is_final: true, closed_on: closedOn, covered_dates: covered,
         app: { name: APP_NAME, version: APP_VERSION },
-        currency: 'PHP',
-        money_unit: 'centavo',
-        timezone: APP_TIMEZONE,
+        currency: 'PHP', money_unit: 'centavo', timezone: APP_TIMEZONE,
         container_types: {
           bilog: (appSettings.containerTypes.bilog || {}).label || 'Bilog',
           faucet: (appSettings.containerTypes.faucet || {}).label || 'Faucet'
@@ -2361,8 +2768,7 @@
       if (!Array.isArray(archive) || archive.length === 0) { toast('Archive is empty.'); return; }
       const payload = {
         schema_version: SCHEMA_VERSION, export_type: 'orders',
-        export_mode: 'archive_only',
-        include_archive: true,
+        export_mode: 'archive_only', include_archive: true,
         exported_at: new Date().toISOString(),
         app: { name: APP_NAME, version: APP_VERSION },
         currency: 'PHP', money_unit: 'centavo', timezone: APP_TIMEZONE,
@@ -2388,15 +2794,10 @@
       const archive = loadJSON(KEY_ARCHIVE, []);
       if (!Array.isArray(archive) || archive.length === 0) { toast('Archive is empty.'); return; }
       confirmDelete({
-        title: 'Delete archive?',
-        item: `${archive.length} archived order${archive.length === 1 ? '' : 's'}`,
+        title: 'Delete archive?', item: `${archive.length} archived order${archive.length === 1 ? '' : 's'}`,
         instruction: 'All archived orders will be permanently deleted. Export them first if you need to keep a copy.',
         okLabel: 'Delete archive',
-        onConfirm: () => {
-          saveJSON(KEY_ARCHIVE, []);
-          renderArchiveInfo();
-          toast('Archive deleted.');
-        }
+        onConfirm: () => { saveJSON(KEY_ARCHIVE, []); renderArchiveInfo(); toast('Archive deleted.'); }
       });
     }
 
@@ -2422,6 +2823,8 @@
         container_type: tx.container_type || null,
         container_status: tx.container_status || null,
         container_count: toPosInt(tx.container_count, 0) || 0,
+        container_out_count: toPosInt(tx.container_out_count, 0) || 0,
+        container_history: tx.container_history || [],
         custom: tx.custom && typeof tx.custom === 'object' ? { ...tx.custom } : {},
         status_history: (tx.statusHistory || []).map(h => ({ status: h.status, at: iso(h.at) || h.at })),
         edits: (tx.edits || []).map(e => ({ at: iso(e.at) || e.at, changes: String(e.changes || '') }))
@@ -2436,8 +2839,7 @@
       if (all.length === 0) { toast('No data to export yet.'); return false; }
       const payload = {
         schema_version: SCHEMA_VERSION, export_type: 'orders',
-        export_mode: 'full',
-        include_archive: true,
+        export_mode: 'full', include_archive: true,
         exported_at: new Date().toISOString(),
         app: { name: APP_NAME, version: APP_VERSION },
         currency: 'PHP', money_unit: 'centavo', timezone: APP_TIMEZONE,
@@ -2484,6 +2886,7 @@
           'Container Type': t.container_type ? containerTypeLabel(t.container_type) : '',
           'Container Status': t.container_status ? containerStatusLabel(t.container_status) : '',
           'Container Count': toPosInt(t.container_count, 0) || 0,
+          'Container Out': toPosInt(t.container_out_count, 0) || 0,
           'Voided At': isVoided(t) ? formatDate(t.voided_at, true) : '',
           'Minutes to Deliver': minutesToDeliver(t) != null ? minutesToDeliver(t) : ''
         };
@@ -2506,7 +2909,7 @@
       const cur = appSettings.currency;
       const cols = appSettings.customColumns || [];
       const headers = ['Date', 'Time', 'Customer Name', 'Quantity', `Unit Price (${cur})`, `Total Price (${cur})`,
-        'Special', 'Status', 'Delivered At', 'Paid At', 'Rider', 'Container Type', 'Container Status', 'Container Count',
+        'Special', 'Status', 'Delivered At', 'Paid At', 'Rider', 'Container Type', 'Container Status', 'Container Count', 'Container Out',
         'Voided At', 'Minutes to Deliver', ...cols.map(c => c.name)];
       const rows = all.map(t => [
         formatDate(t.date), formatTime(t.date), t.customer || 'no name', toPosInt(t.qty, 1),
@@ -2519,6 +2922,7 @@
         t.container_type ? containerTypeLabel(t.container_type) : '',
         t.container_status ? containerStatusLabel(t.container_status) : '',
         toPosInt(t.container_count, 0) || 0,
+        toPosInt(t.container_out_count, 0) || 0,
         isVoided(t) ? formatDate(t.voided_at, true) : '',
         minutesToDeliver(t) != null ? minutesToDeliver(t) : '',
         ...cols.map(c => (t.custom && t.custom[c.id]) ? String(t.custom[c.id]) : '')
@@ -2540,8 +2944,7 @@
 
     function backupJSON() {
       const payload = {
-        schema_version: SCHEMA_VERSION,
-        export_type: 'app_backup',
+        schema_version: SCHEMA_VERSION, export_type: 'app_backup',
         app: { name: APP_NAME, version: APP_VERSION },
         exportedAt: new Date().toISOString(),
         settings: appSettings, presets: presetsConfig, customers: savedCustomers,
@@ -2553,6 +2956,7 @@
       a.href = url; a.download = `bookkeeping_backup_${localDateStr()}.json`;
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+      appSettings.lastBackupAt = Date.now(); saveJSON(KEY_SETTINGS, appSettings);
       toast('Backup downloaded.');
     }
     function restoreJSON() {
@@ -2578,10 +2982,11 @@
               desc: `This replaces all current data with the backup from ${data.exportedAt ? formatDate(data.exportedAt, true) : 'unknown time'}.\n\nAll current orders, settings, and archive will be replaced with the backup contents.`,
               okLabel: 'Restore',
               onConfirm: () => {
+                takeSnapshot('before-restore');
                 if (data.settings) appSettings = mergeSettings(data.settings);
                 if (data.presets) presetsConfig = mergePresets(data.presets);
                 if (Array.isArray(data.customers)) savedCustomers = data.customers.filter(n => typeof n === 'string' && n.trim()).slice(0, MAX_SAVED_CUSTOMERS);
-                if (Array.isArray(data.transactions)) transactions = data.transactions.map(t => ({ ...t, id: String(t.id) }));
+                if (Array.isArray(data.transactions)) transactions = data.transactions.filter(t => t && t.id != null).map(t => ({ ...t, id: safeId(t.id) }));
                 if (Array.isArray(data.archive)) saveJSON(KEY_ARCHIVE, data.archive);
                 if (Array.isArray(data.columnOrder)) {
                   const valid = Object.keys(COLUMN_DEFS); const out = [];
@@ -2612,8 +3017,7 @@
       const mql = window.matchMedia('print');
       let cleaned = false;
       const cleanup = () => {
-        if (cleaned) return;
-        cleaned = true;
+        if (cleaned) return; cleaned = true;
         document.body.classList.remove(bodyClass);
         if (mql && mql.removeEventListener) mql.removeEventListener('change', onMql);
         window.removeEventListener('afterprint', cleanup);
@@ -2650,8 +3054,7 @@
       const tabId = 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2);
       let warned = false;
       function showWarning() {
-        if (warned) return;
-        warned = true;
+        if (warned) return; warned = true;
         const modal = document.getElementById('multi-tab-modal');
         if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
         const banner = document.getElementById('multi-tab-banner');
@@ -2681,32 +3084,12 @@
         });
       }
     })();
-    let deferredInstallPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); deferredInstallPrompt = e;
-      const btn = document.getElementById('btn-install'); if (btn) btn.classList.remove('hidden');
-    });
-    function promptInstall() {
-      const btn = document.getElementById('btn-install');
-      if (!deferredInstallPrompt) {
-        toast('Use your browser menu → "Add to Home Screen".');
-        if (btn) btn.classList.add('hidden');
-        return;
-      }
-      deferredInstallPrompt.prompt();
-      deferredInstallPrompt.userChoice.then((res) => {
-        if (res && res.outcome === 'accepted' && btn) btn.classList.add('hidden');
-        deferredInstallPrompt = null;
-      });
-    }
 
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
     applyTextScale();
     updateHeaderDate();
     updateEndDayBanner();
-    setInterval(function () {
-      updateHeaderDate();
-      updateEndDayBanner();
-    }, 60000);
+    setInterval(function () { updateHeaderDate(); updateEndDayBanner(); }, 60000);
     renderTierButtons(); renderQtyPresetButtons(); renderAllSettingsEditors();
     syncPresetUI(); renderSavedCustomerChips(); applyCashVisibility();
     updateDeliveryDisplay(); updateContainerDisplay();
@@ -2719,8 +3102,15 @@
       if (isModalOpen()) { closeModal(true); return; }
       const mm = document.getElementById('multi-tab-modal');
       if (mm && !mm.classList.contains('hidden')) { dismissMultiTab(); return; }
+      const em = document.getElementById('edit-order-modal');
+      if (em && !em.classList.contains('hidden')) { closeEditOrderModal(); return; }
+      const rm = document.getElementById('return-container-modal');
+      if (rm && !rm.classList.contains('hidden')) { closeReturnModal(); return; }
+      const sm = document.getElementById('stats-modal');
+      if (sm && !sm.classList.contains('hidden')) { closeStatsModal(); return; }
       if (isTableViewOpen()) closeTableView();
       else if (isBoardViewOpen()) closeBoardView();
+      else closePanels();
     });
   </script>
 </body>
