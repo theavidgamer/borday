@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ledger-v5';
+const CACHE_VERSION = 'ledger-v6';
 const CORE = [
   './',
   './index.html',
